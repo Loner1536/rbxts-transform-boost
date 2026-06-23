@@ -4,7 +4,7 @@ export interface PluginConfig {
     optimize?: boolean;
 
     // Prepend --!strict to every file that doesn't already have it.
-    // Default: false
+    // Default: true
     strict?: boolean;
 
     // Hoist repeated game.GetService() calls to module-level locals,

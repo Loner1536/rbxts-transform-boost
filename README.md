@@ -24,7 +24,7 @@ npm install --save-dev rbxts-transform-boost
             {
                 "transform": "rbxts-transform-boost",
                 "optimize": true,
-                "strict": false,
+                "strict": true,
                 "hoist": true
             }
         ]
@@ -37,7 +37,7 @@ npm install --save-dev rbxts-transform-boost
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `optimize` | `boolean` | `true` | Prepend `--!optimize 2` to every file that doesn't already have it |
-| `strict` | `boolean` | `false` | Prepend `--!strict` to every file that doesn't already have it |
+| `strict` | `boolean` | `true` | Prepend `--!strict` to every file that doesn't already have it |
 | `hoist` | `boolean` | `true` | Hoist `GetService` calls and repeated property reads to locals |
 
 `--!native` is never auto-inserted. Add `//!native` at the top of your TypeScript file for hot paths you've profiled — the compiler preserves it.

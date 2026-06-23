@@ -12,7 +12,7 @@ export default function(
     config: PluginConfig = {},
     { ts }: { ts: typeof import("typescript") },
 ): ts.TransformerFactory<ts.SourceFile> {
-    const { optimize = true, strict = false, hoist = true } = config;
+    const { optimize = true, strict = true, hoist = true } = config;
 
     return (ctx: ts.TransformationContext) => (sourceFile: ts.SourceFile): ts.SourceFile => {
         annotatePass(ts, program, sourceFile);
