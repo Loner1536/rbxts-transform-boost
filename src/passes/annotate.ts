@@ -2,7 +2,6 @@ import type ts from "typescript";
 import * as fs from "fs";
 import * as path from "path";
 
-// Luau type names for TypeScript type strings rotor knows about
 const LUAU_TYPE: Record<string, string> = {
     number: "number",
     string: "string",
@@ -24,7 +23,6 @@ const LUAU_TYPE: Record<string, string> = {
     Region3: "Region3",
     Ray: "Ray",
     buffer: "buffer",
-    // Roblox service types
     Instance: "Instance",
     BasePart: "BasePart",
     Part: "Part",
@@ -34,37 +32,21 @@ const LUAU_TYPE: Record<string, string> = {
     Workspace: "Workspace",
     RunService: "RunService",
     Players: "Players",
-    // Luau numeric arrays — kept as {number} in Luau
 };
 
 type FnAnnotation = {
-    params: Array<string | null>; // null = unknown/skip
+    params: Array<string | null>;
+    ret: string | null;
 };
 
-// Global sidecar: outLuauPath → list of function annotations for that file
 const sidecar = new Map<string, Map<string, FnAnnotation>>();
 let hooked = false;
-
-function luauTypeForTsType(
-    ts: typeof import("typescript"),
-    checker: ts.TypeChecker,
-    node: ts.ParameterDeclaration,
-): string | null {
-    if (node.type) {
-        const mapped = mapTypeNode(ts, node.type);
-        if (mapped) return mapped;
-    }
-    const type = checker.getTypeAtLocation(node);
-    const name = checker.typeToString(type);
-    return LUAU_TYPE[name] ?? null;
-}
 
 function mapTypeNode(ts: typeof import("typescript"), typeNode: ts.TypeNode): string | null {
     if (ts.isTypeReferenceNode(typeNode)) {
         const name = ts.isIdentifier(typeNode.typeName) ? typeNode.typeName.text : null;
         if (!name) return null;
         if (LUAU_TYPE[name]) return LUAU_TYPE[name];
-        // Array<T> → {T}
         if ((name === "Array" || name === "ReadonlyArray") && typeNode.typeArguments?.length === 1) {
             const inner = mapTypeNode(ts, typeNode.typeArguments[0]);
             return inner ? `{${inner}}` : "{any}";
@@ -84,25 +66,44 @@ function mapTypeNode(ts: typeof import("typescript"), typeNode: ts.TypeNode): st
     return null;
 }
 
-function outPathForSource(
-    sourceFile: ts.SourceFile,
-    program: ts.Program,
+function luauTypeForParam(
+    ts: typeof import("typescript"),
+    checker: ts.TypeChecker,
+    node: ts.ParameterDeclaration,
 ): string | null {
+    if (node.type) {
+        const mapped = mapTypeNode(ts, node.type);
+        if (mapped) return mapped;
+    }
+    const name = checker.typeToString(checker.getTypeAtLocation(node));
+    return LUAU_TYPE[name] ?? null;
+}
+
+function luauTypeForReturn(
+    ts: typeof import("typescript"),
+    checker: ts.TypeChecker,
+    node: ts.FunctionDeclaration,
+): string | null {
+    if (node.type) {
+        const mapped = mapTypeNode(ts, node.type);
+        if (mapped) return mapped;
+    }
+    const sig = checker.getSignatureFromDeclaration(node);
+    if (!sig) return null;
+    const ret = checker.getReturnTypeOfSignature(sig);
+    const name = checker.typeToString(ret);
+    return LUAU_TYPE[name] ?? null;
+}
+
+function outPathForSource(sourceFile: ts.SourceFile, program: ts.Program): string | null {
     const options = program.getCompilerOptions();
     const outDir = options.outDir;
     if (!outDir) return null;
-
-    // Compute rootDir: explicit option or the common root of all source files
-    const rootDir = options.rootDir
-        ?? commonRoot(program.getRootFileNames());
+    const rootDir = options.rootDir ?? commonRoot(program.getRootFileNames());
     if (!rootDir) return null;
-
     const rel = path.relative(rootDir, sourceFile.fileName);
     if (rel.startsWith("..")) return null;
-
-    // Change .ts / .tsx extension to .luau
-    const luauRel = rel.replace(/\.tsx?$/, ".luau");
-    return path.join(outDir, luauRel);
+    return path.join(outDir, rel.replace(/\.tsx?$/, ".luau"));
 }
 
 function commonRoot(files: readonly string[]): string | undefined {
@@ -129,10 +130,10 @@ function collectAnnotations(
 
     function visit(node: ts.Node): void {
         if (ts.isFunctionDeclaration(node) && node.name) {
-            const fnName = node.name.text;
-            const params = node.parameters.map(p => luauTypeForTsType(ts, checker, p));
-            if (params.some(p => p !== null)) {
-                fileMap.set(fnName, { params });
+            const params = node.parameters.map(p => luauTypeForParam(ts, checker, p));
+            const ret = luauTypeForReturn(ts, checker, node);
+            if (params.some(p => p !== null) || ret !== null) {
+                fileMap.set(node.name.text, { params, ret });
             }
         }
         ts.forEachChild(node, visit);
@@ -140,32 +141,61 @@ function collectAnnotations(
     visit(sourceFile);
 }
 
+function hoistGetService(src: string): string {
+    // Count occurrences of each game:GetService("X") call
+    const re = /game:GetService\("([^"]+)"\)/g;
+    const counts = new Map<string, number>();
+    for (const m of src.matchAll(re)) {
+        counts.set(m[1], (counts.get(m[1]) ?? 0) + 1);
+    }
+
+    const toHoist = [...counts.entries()].filter(([, n]) => n >= 2).map(([svc]) => svc);
+    if (toHoist.length === 0) return src;
+
+    // Build locals and replace
+    const decls = toHoist
+        .map(svc => `local _${svc} = game:GetService("${svc}")`)
+        .join("\n");
+
+    for (const svc of toHoist) {
+        src = src.split(`game:GetService("${svc}")`).join(`_${svc}`);
+    }
+
+    // Insert after any leading --! directives and the rotor header comment
+    const insertAt = src.search(/^(?!--[!\s]|--\s*Compiled)/m);
+    if (insertAt === -1) return decls + "\n" + src;
+    return src.slice(0, insertAt) + decls + "\n" + src.slice(insertAt);
+}
+
 function injectAnnotations(luauPath: string, fileMap: Map<string, FnAnnotation>): void {
     if (!fs.existsSync(luauPath)) return;
     let src = fs.readFileSync(luauPath, "utf8");
     let changed = false;
 
+    // Inject param + return type annotations
     for (const [fnName, ann] of fileMap) {
-        if (ann.params.every(p => p === null)) continue;
+        if (ann.params.every(p => p === null) && ann.ret === null) continue;
 
-        // Match: local function fnName(a, b, c)
-        // Captures the param list so we can replace individual names
         const re = new RegExp(
-            `(local function ${escapeRegex(fnName)}\\()([^)]*)(\\.\\.\\.\\))?\\)`,
+            `(local function ${escapeRegex(fnName)}\\()([^)]*)(\\.\\.\\.)?(\\))`,
         );
-        src = src.replace(re, (_match: string, open: string, rawParams: string, vararg: string | undefined) => {
+        src = src.replace(re, (_m, open: string, rawParams: string, vararg: string | undefined, close: string) => {
             const names = rawParams.split(",").map((s: string) => s.trim()).filter(Boolean);
             const annotated = names.map((name: string, i: number) => {
-                // strip any existing annotation
                 const bare = name.split(":")[0].trim();
                 const typ = ann.params[i];
                 return typ ? `${bare}: ${typ}` : bare;
             });
             if (vararg) annotated.push("...");
+            const retSuffix = ann.ret ? `: ${ann.ret}` : "";
             changed = true;
-            return `${open}${annotated.join(", ")})`;
+            return `${open}${annotated.join(", ")}${close}${retSuffix}`;
         });
     }
+
+    // Hoist any repeated game:GetService() calls injected by the compiler
+    const hoisted = hoistGetService(src);
+    if (hoisted !== src) { src = hoisted; changed = true; }
 
     if (changed) fs.writeFileSync(luauPath, src, "utf8");
 }
@@ -185,9 +215,7 @@ function installWatcher(outDir: string): void {
         const fileMap = sidecar.get(full);
         if (!fileMap) return;
         seen.add(full);
-        if (fileMap.size > 0) {
-            try { injectAnnotations(full, fileMap); } catch { /* ignore */ }
-        }
+        try { injectAnnotations(full, fileMap); } catch { /* ignore */ }
     });
     watcher.unref();
 }
@@ -199,9 +227,6 @@ export function annotatePass(
 ): void {
     const outPath = outPathForSource(sourceFile, program);
     if (!outPath) return;
-
-    const checker = program.getTypeChecker();
-    collectAnnotations(ts, checker, sourceFile, outPath);
-    const outDir = program.getCompilerOptions().outDir!;
-    installWatcher(outDir);
+    collectAnnotations(ts, program.getTypeChecker(), sourceFile, outPath);
+    installWatcher(program.getCompilerOptions().outDir!);
 }
