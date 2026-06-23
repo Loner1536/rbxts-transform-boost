@@ -153,6 +153,7 @@ function organizePreamble(src: string): string {
 
     // Collect all top-level local declarations before the first function/other code
     const services: string[] = [];
+    const runtime: string[] = [];
     const imports: string[] = [];
     const bindings: string[] = [];
 
@@ -162,10 +163,11 @@ function organizePreamble(src: string): string {
 
         if (/^local \w+ = game:GetService\(/.test(line)) {
             services.push(line); i++;
-        } else if (/^local \w+ = require\(/.test(line) || /^local \w+ = TS\.import\(/.test(line)) {
+        } else if (/^local \w+ = require\(/.test(line)) {
+            runtime.push(line); i++;
+        } else if (/^local \w+ = TS\.import\(/.test(line)) {
             imports.push(line); i++;
         } else if (/^local \w+ = \w+[\.\[]/.test(line) && !/^local function/.test(line)) {
-            // property access binding: local x = module.x or local x = module["x"]
             bindings.push(line); i++;
         } else {
             break;
@@ -174,6 +176,7 @@ function organizePreamble(src: string): string {
 
     const out: string[] = [...directives];
     if (services.length > 0) out.push("", "-- Services", ...services);
+    if (runtime.length > 0) out.push("", "-- Runtime", ...runtime);
     if (imports.length > 0) out.push("", "-- Imports", ...imports);
     if (bindings.length > 0) out.push("", "-- Bindings", ...bindings);
     if (i < lines.length) out.push("", ...lines.slice(i));
