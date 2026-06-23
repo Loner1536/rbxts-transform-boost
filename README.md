@@ -1,6 +1,12 @@
 # rbxts-transform-boost
 
-> **Successor to [`rbxts-transformer-luau-annotate`](https://github.com/Loner1536/rbxts-transformer-luau-annotate).** If you were using that package, switch to this one — it includes everything the old package did (Luau type annotation injection) plus GetService hoisting, property chain hoisting, loop bounds hoisting, and `--!optimize 2`.
+> **Successor to [`rbxts-transformer-luau-annotate`](https://github.com/Loner1536/rbxts-transformer-luau-annotate).** That package was accidentally removed from npm. Migrate to this one.
+>
+> **What carried over:** Luau type annotation injection on function parameters for native codegen (primitives, Roblox value types, arrays).
+>
+> **What's new:** `--!optimize 2` on every file, `game:GetService()` hoisting to module-level locals, repeated property chain hoisting, loop bounds hoisting — all without needing `//!native` in every file.
+>
+> **What's different:** The old package also annotated return types, local variable declarations, class methods, and user-defined interfaces/type aliases. Those are not yet in this package — they're planned but the implementation is non-trivial. The old package also had reliability issues that this rewrite addresses.
 
 A roblox-ts transformer that automatically applies Luau performance directives at compile time — no runtime cost, no code changes required.
 
