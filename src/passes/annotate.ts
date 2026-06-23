@@ -375,14 +375,11 @@ function escapeRegex(s: string): string {
 function installWatcher(outDir: string): void {
     if (hooked) return;
     hooked = true;
-    const seen = new Set<string>();
     const watcher = fs.watch(outDir, { recursive: true }, (_event, filename) => {
         if (!filename || !filename.endsWith(".luau")) return;
         const full = path.join(outDir, filename);
-        if (seen.has(full)) return;
         const entry = sidecar.get(full);
         if (!entry) return;
-        seen.add(full);
         try { injectAnnotations(full, entry); } catch { /* ignore */ }
     });
     watcher.unref();
