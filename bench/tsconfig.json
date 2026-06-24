@@ -17,7 +17,8 @@
             "types"
         ]
     },
-    "rbxts": {
-        "includePath": "out/rotor/include"
-    }
+    "exclude": [
+        "out",
+        "node_modules"
+    ]
 }

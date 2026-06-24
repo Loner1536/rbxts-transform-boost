@@ -10,8 +10,9 @@
     ],
     "scripts": {
         "build": "tsc",
-        "bench:rotor": "bun run build && cd bench && rotor build -p tsconfig.rotor.json && rotor build -p tsconfig.notransform.rotor.json",
-        "bench:roblox-ts": "bun run build && cd bench && rbxtsc -p tsconfig.roblox-ts.json --rojo roblox-ts.project.json && rbxtsc -p tsconfig.notransform.roblox-ts.json --rojo roblox-ts.project.json",
+        "install": "cd bench && bun install",
+        "bench:rotor": "bun run build && cd bench && rotor build -p tsconfig.rotor.json --rojo rotor.project.json --verbose && rotor build -p tsconfig.notransform.rotor.json --rojo rotor.project.json --verbose",
+        "bench:roblox-ts": "bun run build && cd bench && bunx rbxtsc -p tsconfig.roblox-ts.json --rojo roblox-ts.project.json --verbose && bunx rbxtsc -p tsconfig.notransform.roblox-ts.json --rojo roblox-ts.project.json --verbose",
         "bench:rbxlx:rotor": "bun run bench:rotor && cd bench && rojo build rotor.project.json -o benchmark-rotor.rbxlx",
         "bench:rbxlx:roblox-ts": "npm run bench:roblox-ts && cd bench && rojo build roblox-ts.project.json -o benchmark-roblox-ts.rbxlx"
     },

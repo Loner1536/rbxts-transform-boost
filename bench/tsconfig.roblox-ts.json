@@ -1,19 +1,39 @@
 {
-    "extends": "./tsconfig.json",
     "compilerOptions": {
+        "target": "ESNext",
+        "module": "commonjs",
+        "moduleDetection": "force",
+        "moduleResolution": "Node",
+        "strict": true,
+        "noLib": true,
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
+        "forceConsistentCasingInFileNames": true,
+        "rootDir": "./src",
         "outDir": "./out/roblox-ts/src",
+        "typeRoots": [
+            "./node_modules/@rbxts"
+        ],
+        "types": [
+            "types"
+        ],
         "plugins": [
             {
                 "transform": "rbxts-transform-boost",
                 "optimize": true,
+                "verbose": true,
                 "hoist": true
             }
         ]
     },
     "include": [
-        "./src/server",
-        "./src/shared/tests",
+        "./src/server/**/*.ts",
+        "./src/shared/tests/**/*.ts",
         "./src/shared/fns.ts"
+    ],
+    "exclude": [
+        "node_modules",
+        "out"
     ],
     "rbxts": {
         "includePath": "out/roblox-ts/include"

@@ -2,7 +2,7 @@
     "dependencies": {
         "@rbxts/compiler-types": "^3.0.0-types.0",
         "@rbxts/types": "^1.0.928",
-        "rbxts-transform-boost": "^1.1.0",
-        "roblox-ts": "^3.0.0"
+        "rbxts-transform-boost": "file:../",
+        "roblox-ts": "3.0.0"
     }
 }

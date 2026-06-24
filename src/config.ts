@@ -11,4 +11,8 @@ export interface PluginConfig {
     // and hoist repeated property access chains within functions to locals.
     // Default: true
     hoist?: boolean;
+
+    // Add logging to compile output
+    // Default: false
+    verbose?: boolean
 }

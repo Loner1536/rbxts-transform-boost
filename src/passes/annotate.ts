@@ -420,17 +420,28 @@ function escapeRegex(s: string): string {
     return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+let watcher: fs.FSWatcher | null = null;
+let quietTimer: ReturnType<typeof setTimeout> | null = null;
+
 function installWatcher(outDir: string): void {
     if (hooked) return;
     hooked = true;
-    const watcher = fs.watch(outDir, { recursive: true }, (_event, filename) => {
+
+    watcher = fs.watch(outDir, { recursive: true }, (_event, filename) => {
         if (!filename || !filename.endsWith(".luau")) return;
         const full = path.join(outDir, filename);
         if (writingFiles.has(full)) return;
         const entry = sidecar.get(full);
         if (!entry) return;
         try { injectAnnotations(full, entry); } catch { /* ignore */ }
+
+        if (quietTimer) clearTimeout(quietTimer);
+        quietTimer = setTimeout(() => {
+            watcher?.close();
+            watcher = null;
+        }, 200);
     });
+
     watcher.unref();
 }
 
