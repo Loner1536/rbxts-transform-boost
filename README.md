@@ -24,7 +24,7 @@ npm install --save-dev rbxts-transform-boost
             {
                 "transform": "rbxts-transform-boost",
                 "optimize": true,
-                verbose: true,
+                "verbose": true,
                 "strict": true,
                 "hoist": true
             }
