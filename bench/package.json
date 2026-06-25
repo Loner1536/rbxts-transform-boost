@@ -4,7 +4,7 @@
         "@rbxts/pretty-react-hooks": "^0.6.4",
         "@rbxts/react": "17.3.7-ts.2",
         "@rbxts/types": "^1.0.928",
-        "rbxts-transform-boost": "file:..",
-        "roblox-ts": "3.0.0"
+        "rbxts-transform-boost": "*",
+        "roblox-ts": "5.5.3"
     }
 }

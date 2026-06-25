@@ -21,8 +21,7 @@
             {
                 "transform": "rbxts-transform-boost",
                 "optimize": true,
-                "verbose": true,
-                "hoist": true
+                "verbose": true
             }
         ]
     },
