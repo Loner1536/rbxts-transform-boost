@@ -17,39 +17,45 @@ npm install --save-dev rbxts-transform-boost
 ```
 
 `tsconfig.json`:
+
 ```json
 {
-    "compilerOptions": {
-        "plugins": [
-            {
-                "transform": "rbxts-transform-boost",
-                "optimize": true,
-                "optimizeLevel": 2,
-                "verbose": true,
-                "strict": true,
-                "hoist": true
-            }
-        ]
-    }
+  "compilerOptions": {
+    "plugins": [
+      {
+        "transform": "rbxts-transform-boost",
+        "optimizeLevel": 2,
+        "optimize": true,
+        "verbose": true,
+        "strict": true,
+        "hoist": true
+      }
+    ]
+  }
 }
 ```
 
 ### Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|--------------|
-| `optimize` | `boolean` | `false` | Prepend `--!optimize <optimizeLevel>` to every file that doesn't already have it |
-| `optimizeLevel` | `0 \| 1 \| 2` | `2` | The level used in the `--!optimize` directive when `optimize` is enabled |
-| `strict` | `boolean` | `true` | Prepend `--!strict` to every file that doesn't already have it |
-| `hoist` | `boolean` | `true` | Hoist `GetService` calls, repeated property reads, and loop bounds to locals |
-| `verbose` | `boolean` | `false` | Log each transformed file during compilation |
+| Option          | Type          | Default | Description                                                                      |
+| --------------- | ------------- | ------- | -------------------------------------------------------------------------------- |
+| `optimize`      | `boolean`     | `false` | Prepend `--!optimize <optimizeLevel>` to every file that doesn't already have it |
+| `optimizeLevel` | `0 \| 1 \| 2` | `2`     | The level used in the `--!optimize` directive when `optimize` is enabled         |
+| `strict`        | `boolean`     | `true`  | Prepend `--!strict` to every file that doesn't already have it                   |
+| `hoist`         | `boolean`     | `true`  | Hoist `GetService` calls, repeated property reads, and loop bounds to locals     |
+| `verbose`       | `boolean`     | `false` | Log each transformed file during compilation                                     |
 
 `--!native` is never auto-inserted. Add `//!native` at the top of your TypeScript file for hot paths you've profiled — the compiler preserves it.
 
 ```typescript
 //!native
-export function integrate(pos: Vector3, vel: Vector3, acc: Vector3, dt: number) {
-    // ...
+export function integrate(
+  pos: Vector3,
+  vel: Vector3,
+  acc: Vector3,
+  dt: number,
+) {
+  // ...
 }
 ```
 
@@ -113,9 +119,9 @@ Every `game:GetService("X")` call in a file is hoisted to a module-level local o
 ```typescript
 // TypeScript source
 export function serviceWork(): string {
-    const count = game.GetService("Players").GetPlayers().size();
-    const running = game.GetService("RunService").IsRunning();
-    return `${count}-${running}`;
+  const count = game.GetService("Players").GetPlayers().size();
+  const running = game.GetService("RunService").IsRunning();
+  return `${count}-${running}`;
 }
 ```
 
@@ -153,10 +159,10 @@ Any property access chain that appears **2 or more times** inside the same funct
 ```typescript
 // TypeScript source
 export function cameraWork(camera: Camera): number {
-    const pos = camera.CFrame.Position;
-    const look = camera.CFrame.LookVector;  // camera.CFrame read twice
-    const fov = camera.FieldOfView;
-    return pos.Magnitude + look.X + fov;
+  const pos = camera.CFrame.Position;
+  const look = camera.CFrame.LookVector; // camera.CFrame read twice
+  const fov = camera.FieldOfView;
+  return pos.Magnitude + look.X + fov;
 }
 ```
 
@@ -213,7 +219,7 @@ end
 ```typescript
 // TypeScript source
 for (let i = 0; i < arr.size(); i++) {
-    process(arr[i]);
+  process(arr[i]);
 }
 ```
 
@@ -241,7 +247,7 @@ After the compiler writes `.luau` files, the transformer injects Luau type annot
 ```typescript
 // TypeScript source
 export function dot(a: Vector3, b: Vector3): number {
-    return a.X * b.X + a.Y * b.Y + a.Z * b.Z;
+  return a.X * b.X + a.Y * b.Y + a.Z * b.Z;
 }
 ```
 
@@ -312,26 +318,26 @@ local data = TS.import(script, ...)
 
 Measured in Roblox Studio server context. 100,000 iterations per benchmark (10,000 for `cfLookAt`). Both suites use `//!native` — the only variable is whether the transformer is applied, so the numbers reflect what the transformer itself contributes on top of native.
 
-| Benchmark | With transformer | Without | Speedup | Driver |
-|-----------|-----------------|---------|---------|--------|
-| integrate (Verlet) | 0.058 µs | 0.071 µs | **1.2×** | type annotations |
-| dot (V3 manual) | 0.025 µs | 0.046 µs | **1.8×** | type annotations |
-| cross (V3 manual) | 0.024 µs | 0.072 µs | **3.0×** | 6× field hoisting + type annotations |
-| lerpVec3 (V3 manual) | 0.026 µs | 0.061 µs | **2.3×** | 3× field hoisting + type annotations |
-| encodeFixed (buf+math) | 0.025 µs | 0.026 µs | ~1× | — |
-| encodePacket (3× fixed) | 0.030 µs | 0.028 µs | ~1× | — |
-| sumWeighted (loop) | 0.051 µs | 0.054 µs | ~1× | type annotations |
-| dotProduct (loop) | 0.050 µs | 0.060 µs | **1.2×** | type annotations |
-| norm (loop+sqrt) | 0.052 µs | 0.058 µs | **1.1×** | type annotations |
-| mathHeavy (trig+sqrt) | 0.044 µs | 0.050 µs | **1.1×** | type annotations |
-| fib(20) (iter) | 0.062 µs | 0.071 µs | **1.1×** | type annotations |
-| cfLookAt (ctor) | 0.087 µs | 0.082 µs | ~1× | C++ floor — no Luau work |
-| cfChain (mul+angles) | 0.102 µs | 0.092 µs | ~1× | C++ floor — no Luau work |
-| serviceWork (GetService ×2) | 0.243 µs | 0.481 µs | **2.0×** | GetService hoisting |
-| multiSvc (GetService ×3) | 0.154 µs | 0.505 µs | **3.3×** | GetService hoisting |
-| cameraWork (prop chain) | 0.185 µs | 0.218 µs | **1.2×** | `camera.CFrame` hoisted (2 reads → 1) |
-| formatStats (template) | 0.191 µs | 0.187 µs | ~1× | string — no arithmetic |
-| buildKey (template) | 0.085 µs | 0.079 µs | ~1× | — |
+| Benchmark                   | With transformer | Without  | Speedup  | Driver                                |
+| --------------------------- | ---------------- | -------- | -------- | ------------------------------------- |
+| integrate (Verlet)          | 0.058 µs         | 0.071 µs | **1.2×** | type annotations                      |
+| dot (V3 manual)             | 0.025 µs         | 0.046 µs | **1.8×** | type annotations                      |
+| cross (V3 manual)           | 0.024 µs         | 0.072 µs | **3.0×** | 6× field hoisting + type annotations  |
+| lerpVec3 (V3 manual)        | 0.026 µs         | 0.061 µs | **2.3×** | 3× field hoisting + type annotations  |
+| encodeFixed (buf+math)      | 0.025 µs         | 0.026 µs | ~1×      | —                                     |
+| encodePacket (3× fixed)     | 0.030 µs         | 0.028 µs | ~1×      | —                                     |
+| sumWeighted (loop)          | 0.051 µs         | 0.054 µs | ~1×      | type annotations                      |
+| dotProduct (loop)           | 0.050 µs         | 0.060 µs | **1.2×** | type annotations                      |
+| norm (loop+sqrt)            | 0.052 µs         | 0.058 µs | **1.1×** | type annotations                      |
+| mathHeavy (trig+sqrt)       | 0.044 µs         | 0.050 µs | **1.1×** | type annotations                      |
+| fib(20) (iter)              | 0.062 µs         | 0.071 µs | **1.1×** | type annotations                      |
+| cfLookAt (ctor)             | 0.087 µs         | 0.082 µs | ~1×      | C++ floor — no Luau work              |
+| cfChain (mul+angles)        | 0.102 µs         | 0.092 µs | ~1×      | C++ floor — no Luau work              |
+| serviceWork (GetService ×2) | 0.243 µs         | 0.481 µs | **2.0×** | GetService hoisting                   |
+| multiSvc (GetService ×3)    | 0.154 µs         | 0.505 µs | **3.3×** | GetService hoisting                   |
+| cameraWork (prop chain)     | 0.185 µs         | 0.218 µs | **1.2×** | `camera.CFrame` hoisted (2 reads → 1) |
+| formatStats (template)      | 0.191 µs         | 0.187 µs | ~1×      | string — no arithmetic                |
+| buildKey (template)         | 0.085 µs         | 0.079 µs | ~1×      | —                                     |
 
 > Benchmark figures above were measured with `optimize` enabled. With `optimize` now defaulting to `false`, set `"optimize": true` in your plugin config to reproduce these numbers.
 

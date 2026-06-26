@@ -400,7 +400,6 @@ function hoistPropertyChains(
 
   type HoistEntry = {
     toHoist: Map<string, string>;
-    nullableKeys: Set<string>;
     mutableSkips: string[];
   };
   const hoistMap = new Map<string, HoistEntry>();
@@ -417,7 +416,6 @@ function hoistPropertyChains(
       if (result.toHoist.size > 0) {
         hoistMap.set(`${fn.pos}:${fn.end}`, {
           toHoist: result.toHoist,
-          nullableKeys: result.nullableKeys,
           mutableSkips: result.mutableSkips,
         });
         totalCached += result.toHoist.size;
@@ -445,7 +443,6 @@ function hoistPropertyChains(
           ts,
           fn,
           entry.toHoist,
-          entry.nullableKeys,
           factory,
           ctx,
           dbg,
@@ -615,12 +612,10 @@ function analyseFunction(
   dbg: Debugger,
 ): {
   toHoist: Map<string, string>;
-  nullableKeys: Set<string>;
   mutableSkips: string[];
 } {
   const empty = {
     toHoist: new Map<string, string>(),
-    nullableKeys: new Set<string>(),
     mutableSkips: [] as string[],
   };
   if (!fn.body || !ts.isBlock(fn.body)) return empty;
@@ -653,7 +648,6 @@ function analyseFunction(
   });
 
   const toHoist = new Map<string, string>();
-  const nullableKeys = new Set<string>();
   const mutableSkips: string[] = [];
   let counter = 0;
 
@@ -683,10 +677,15 @@ function analyseFunction(
     const nullableReason = repNode
       ? nullableSegmentReason(ts, checker, repNode)
       : undefined;
-    if (nullableReason) nullableKeys.add(key);
+    if (nullableReason) {
+      // A nullable segment means the chain may be nil at function entry —
+      // hoisting it unconditionally above any nil guard would crash at runtime.
+      // Record it as a skip (shows in verbose output) and leave it in place.
+      mutableSkips.push(`${key} (nullable: ${nullableReason})`);
+      continue;
+    }
 
-    const suffix = nullableReason ? `!` : ``;
-    hoisted.push(`${key}${suffix}`);
+    hoisted.push(key);
     toHoist.set(key, `_cache${counter++}`);
   }
 
@@ -702,14 +701,13 @@ function analyseFunction(
     });
   }
 
-  return { toHoist, nullableKeys, mutableSkips };
+  return { toHoist, mutableSkips };
 }
 
 function applyHoisting(
   ts: typeof import("typescript"),
   fn: ts.FunctionLikeDeclaration,
   toHoist: Map<string, string>,
-  nullableKeys: Set<string>,
   factory: ts.NodeFactory,
   ctx: ts.TransformationContext,
   dbg: Debugger,
@@ -731,19 +729,9 @@ function applyHoisting(
 
     const hoistStmts = Array.from(toHoist.entries()).map(([key, localName]) => {
       const parts = key.split(".");
-      const isNullable = nullableKeys.has(key);
       let expr: ts.Expression = factory.createIdentifier(parts[0]);
       for (let i = 1; i < parts.length; i++) {
         expr = factory.createPropertyAccessExpression(expr, parts[i]);
-        // Assert after each intermediate segment so TS doesn't complain that
-        // e.g. `Client.Ground.Floor` is possibly undefined before `.CFrame`.
-        if (isNullable && i < parts.length - 1) {
-          expr = factory.createNonNullExpression(expr);
-        }
-      }
-      // Assert the full expression too (covers the final segment).
-      if (isNullable) {
-        expr = factory.createNonNullExpression(expr);
       }
       return factory.createVariableStatement(
         undefined,
