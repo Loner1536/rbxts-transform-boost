@@ -1,7 +1,7 @@
 {
     "name": "rbxts-transform-boost-workspace",
     "private": true,
-    "workspaces": [
+    "workspace": [
         "transformer",
         "bench"
     ],

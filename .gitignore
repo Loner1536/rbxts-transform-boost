@@ -1,5 +1,6 @@
 node_modules/
 **/node_modules/
+
 out/
 **/out/
 
@@ -7,10 +8,8 @@ bench/*.rbxlx
 
 package-lock.json
 bench/package-lock.json
-*.lock
 
-scripts
-dump.txt
+bun.lock
 
-slither
-sonic
+*_Store
+*.Store

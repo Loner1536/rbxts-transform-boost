@@ -3,8 +3,8 @@
         "@rbxts/compiler-types": "^3.0.0-types.0",
         "@rbxts/pretty-react-hooks": "^0.6.4",
         "@rbxts/react": "17.3.7-ts.2",
-        "@rbxts/types": "^1.0.928",
-        "rbxts-transform-boost": "*",
-        "roblox-ts": "5.5.3"
+        "@rbxts/types": "^1.0.929",
+        "rbxts-transform-boost": "^1.5.2",
+        "roblox-ts": "3.0.0"
     }
 }
