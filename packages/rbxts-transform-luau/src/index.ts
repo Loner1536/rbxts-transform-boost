@@ -79,6 +79,7 @@ function collectJsDoc(ts: typeof import("typescript"), sourceFile: ts.SourceFile
                 const desc = rawDesc.split("\n").map(l => l.trim()).filter(Boolean);
                 const params = new Map<string, string>();
                 let returns = "";
+                let deprecated: string | undefined;
 
                 for (const tag of doc.tags ?? []) {
                     if (ts.isJSDocParameterTag(tag)) {
@@ -86,11 +87,13 @@ function collectJsDoc(ts: typeof import("typescript"), sourceFile: ts.SourceFile
                         if (name) params.set(name, jsDocText(tag.comment).trim());
                     } else if (ts.isJSDocReturnTag(tag)) {
                         returns = jsDocText(tag.comment).trim();
+                    } else if (ts.isJSDocDeprecatedTag(tag)) {
+                        deprecated = jsDocText(tag.comment).trim();
                     }
                 }
 
-                if (desc.length > 0 || params.size > 0 || returns) {
-                    sidecar.set(node.name.text, { desc, params, returns });
+                if (desc.length > 0 || params.size > 0 || returns || deprecated !== undefined) {
+                    sidecar.set(node.name.text, { desc, params, returns, deprecated });
                 }
             }
         }

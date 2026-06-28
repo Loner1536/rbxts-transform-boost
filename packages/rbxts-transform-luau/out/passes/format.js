@@ -31,6 +31,7 @@ exports.promoteConstIfUnmutated = promoteConstIfUnmutated;
 exports.promoteAllTopLevelConsts = promoteAllTopLevelConsts;
 exports.addSpacing = addSpacing;
 exports.castTsImports = castTsImports;
+exports.injectJsDocFromSidecar = injectJsDocFromSidecar;
 exports.convertJsDocComments = convertJsDocComments;
 exports.applyDirectives = applyDirectives;
 exports.formatFile = formatFile;
@@ -351,6 +352,49 @@ function castTsImports(src) {
         return `${indent}local ${varName}; if false then ${varName} = require(${path}) else ${varName} = ${call} :: any end`;
     });
 }
+function injectJsDocFromSidecar(src, sidecar) {
+    if (sidecar.size === 0)
+        return src;
+    const lines = src.split("\n");
+    const out = [];
+    for (let i = 0; i < lines.length; i++) {
+        const funcMatch = lines[i].match(/^(\t*)local function (\w+)\(([^)]*)\)(?::\s*(.+))?$/);
+        if (funcMatch) {
+            const name = funcMatch[2];
+            const doc = sidecar.get(name);
+            const prevTrimmed = out.length > 0 ? out[out.length - 1].trim() : "";
+            const alreadyHasDoc = /^---/.test(prevTrimmed);
+            if (doc && !alreadyHasDoc) {
+                const indent = funcMatch[1];
+                const paramTypes = new Map();
+                if (funcMatch[3].trim()) {
+                    for (const part of funcMatch[3].split(",")) {
+                        const pm = part.trim().match(/^(\w+)(\??):\s*(.+)$/);
+                        if (pm)
+                            paramTypes.set(pm[1], pm[2] ? `${pm[3].trim()}?` : pm[3].trim());
+                    }
+                }
+                const rawRet = funcMatch[4]?.trim() ?? "";
+                const retType = rawRet.startsWith("(") && rawRet.endsWith(")")
+                    ? rawRet.slice(1, -1).split(",")[0]?.trim() ?? ""
+                    : rawRet;
+                if (doc.deprecated !== undefined)
+                    out.push(`${indent}---@deprecated${doc.deprecated ? ` ${doc.deprecated}` : ""}`);
+                for (const desc of doc.desc)
+                    out.push(`${indent}--- ${desc}`);
+                for (const [paramName, paramDesc] of doc.params) {
+                    const type = paramTypes.get(paramName);
+                    out.push(`${indent}---@param ${paramName}${type ? ` ${type}` : ""}${paramDesc ? ` ${paramDesc}` : ""}`);
+                }
+                if (doc.returns) {
+                    out.push(`${indent}---@return${retType ? ` ${retType}` : ""} ${doc.returns}`);
+                }
+            }
+        }
+        out.push(lines[i]);
+    }
+    return out.join("\n");
+}
 function convertJsDocComments(src) {
     const lines = src.split("\n");
     const out = [];
@@ -387,6 +431,7 @@ function convertJsDocComments(src) {
             const descLines = [];
             const paramTags = [];
             let returnDesc = "";
+            let deprecatedMsg;
             for (const line of cleanBody) {
                 const lc = line.toLowerCase();
                 if (lc.startsWith("@param")) {
@@ -399,11 +444,15 @@ function convertJsDocComments(src) {
                     if (m)
                         returnDesc = m[1].trim();
                 }
+                else if (lc.startsWith("@deprecated")) {
+                    const m = line.match(/@deprecated\s*(.*)/i);
+                    deprecatedMsg = m?.[1].trim() ?? "";
+                }
                 else if (!lc.startsWith("@")) {
                     descLines.push(line);
                 }
             }
-            if (descLines.length === 0 && paramTags.length === 0 && !returnDesc) {
+            if (descLines.length === 0 && paramTags.length === 0 && !returnDesc && deprecatedMsg === undefined) {
                 out.push(lines[blockStart]);
                 for (const bl of rawBody)
                     out.push(bl);
@@ -429,6 +478,8 @@ function convertJsDocComments(src) {
                     : [rawRet];
             }
             const indent = funcMatch[1];
+            if (deprecatedMsg !== undefined)
+                out.push(`${indent}---@deprecated${deprecatedMsg ? ` ${deprecatedMsg}` : ""}`);
             for (const desc of descLines) {
                 out.push(`${indent}--- ${desc}`);
             }
@@ -458,7 +509,7 @@ function applyDirectives(src, strict, optimizeLevel) {
     return src;
 }
 const writingFiles = new Set();
-function formatFile(luauPath, strict, optimizeLevel) {
+function formatFile(luauPath, strict, optimizeLevel, sidecar = new Map()) {
     if (writingFiles.has(luauPath))
         return;
     if (!fs.existsSync(luauPath))
@@ -477,6 +528,7 @@ function formatFile(luauPath, strict, optimizeLevel) {
     apply(fixBlockCommentOpeners);
     apply(organizePreamble);
     apply(convertJsDocComments);
+    apply(s => injectJsDocFromSidecar(s, sidecar));
     apply(stripUselessBlockComments);
     apply(castTsImports);
     apply(addSpacing);

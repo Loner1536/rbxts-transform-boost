@@ -6,6 +6,13 @@ export declare function promoteConstIfUnmutated(src: string, name: string): stri
 export declare function promoteAllTopLevelConsts(src: string): string;
 export declare function addSpacing(src: string): string;
 export declare function castTsImports(src: string): string;
+export type FnDoc = {
+    desc: string[];
+    params: Map<string, string>;
+    returns: string;
+    deprecated?: string;
+};
+export declare function injectJsDocFromSidecar(src: string, sidecar: Map<string, FnDoc>): string;
 export declare function convertJsDocComments(src: string): string;
 export declare function applyDirectives(src: string, strict: boolean, optimizeLevel: false | 0 | 1 | 2): string;
-export declare function formatFile(luauPath: string, strict: boolean, optimizeLevel: false | 0 | 1 | 2): void;
+export declare function formatFile(luauPath: string, strict: boolean, optimizeLevel: false | 0 | 1 | 2, sidecar?: Map<string, FnDoc>): void;

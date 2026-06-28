@@ -124,11 +124,16 @@ function luauTypeForReturn(ts, checker, node) {
     const name = checker.typeToString(ret);
     return LUAU_TYPE[name] ?? null;
 }
+function hasJsDocTag(node, tagName) {
+    const jsDocs = node.jsDoc;
+    return jsDocs?.some(doc => doc.tags?.some(t => t.tagName.text === tagName)) ?? false;
+}
 function collectSidecar(ts, program, sourceFile) {
     const checker = program.getTypeChecker();
     const sidecar = {
         fns: new Map(),
         native: /^\/\/!native\b/m.test(sourceFile.text),
+        fnNative: new Set(),
     };
     function visit(node) {
         if (ts.isFunctionDeclaration(node) && node.name) {
@@ -137,6 +142,9 @@ function collectSidecar(ts, program, sourceFile) {
             const ret = luauTypeForReturn(ts, checker, node);
             if (params.some(p => p !== null) || ret !== null) {
                 sidecar.fns.set(node.name.text, { params, paramNames, ret });
+            }
+            if (hasJsDocTag(node, "native")) {
+                sidecar.fnNative.add(node.name.text);
             }
         }
         ts.forEachChild(node, visit);
@@ -153,6 +161,8 @@ function applyAnnotations(luauPath, sidecar) {
     let src = fs.readFileSync(luauPath, "utf8");
     let changed = false;
     for (const [fnName, ann] of sidecar.fns) {
+        if (!sidecar.native && !sidecar.fnNative.has(fnName))
+            continue;
         if (ann.params.every(p => p === null) && ann.ret === null)
             continue;
         const re = new RegExp(`(local function ${escapeRegex(fnName)}\\()([^)]*)(\\.\\.\\.)?(\\))(?:\\s*:\\s*[^\\r\\n]+)?`);

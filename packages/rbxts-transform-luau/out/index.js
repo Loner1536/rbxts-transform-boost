@@ -22,8 +22,12 @@ var __importStar = (this && this.__importStar) || function (mod) {
     __setModuleDefault(result, mod);
     return result;
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.default = default_1;
+const typescript_1 = __importDefault(require("typescript"));
 const path = __importStar(require("path"));
 const format_1 = require("./passes/format");
 function outPathForSource(sourceFile, program) {
@@ -61,7 +65,7 @@ let finalizeRegistered = false;
 function flushPending() {
     for (const [, meta] of pending) {
         try {
-            (0, format_1.formatFile)(meta.outPath, meta.strict, meta.optimizeLevel);
+            (0, format_1.formatFile)(meta.outPath, meta.strict, meta.optimizeLevel, meta.sidecar);
         }
         catch {
             // silently skip files that fail — they stay as-is
@@ -75,6 +79,50 @@ function registerFinalizer() {
     finalizeRegistered = true;
     process.on("exit", flushPending);
 }
+function jsDocText(comment) {
+    if (!comment)
+        return "";
+    if (typeof comment === "string")
+        return comment;
+    return comment
+        .map(c => ("text" in c ? c.text : ""))
+        .join("");
+}
+function collectJsDoc(ts, sourceFile) {
+    const sidecar = new Map();
+    function visit(node) {
+        if (ts.isFunctionDeclaration(node) && node.name) {
+            const jsDocs = node.jsDoc;
+            if (jsDocs && jsDocs.length > 0) {
+                const doc = jsDocs[jsDocs.length - 1];
+                const rawDesc = jsDocText(doc.comment);
+                const desc = rawDesc.split("\n").map(l => l.trim()).filter(Boolean);
+                const params = new Map();
+                let returns = "";
+                let deprecated;
+                for (const tag of doc.tags ?? []) {
+                    if (ts.isJSDocParameterTag(tag)) {
+                        const name = ts.isIdentifier(tag.name) ? tag.name.text : "";
+                        if (name)
+                            params.set(name, jsDocText(tag.comment).trim());
+                    }
+                    else if (ts.isJSDocReturnTag(tag)) {
+                        returns = jsDocText(tag.comment).trim();
+                    }
+                    else if (ts.isJSDocDeprecatedTag(tag)) {
+                        deprecated = jsDocText(tag.comment).trim();
+                    }
+                }
+                if (desc.length > 0 || params.size > 0 || returns || deprecated !== undefined) {
+                    sidecar.set(node.name.text, { desc, params, returns, deprecated });
+                }
+            }
+        }
+        ts.forEachChild(node, visit);
+    }
+    visit(sourceFile);
+    return sidecar;
+}
 function default_1(program, config = {}) {
     const { strict = true, optimize = false, verbose = false } = config;
     const optimizeLevel = optimize === false ? false : [0, 1, 2].includes(optimize) ? optimize : 2;
@@ -85,7 +133,8 @@ function default_1(program, config = {}) {
     return (_ctx) => (sourceFile) => {
         const outPath = outPathForSource(sourceFile, program);
         if (outPath) {
-            pending.set(outPath, { outPath, strict, optimizeLevel, verbose });
+            const sidecar = collectJsDoc(typescript_1.default, sourceFile);
+            pending.set(outPath, { outPath, strict, optimizeLevel, verbose, sidecar });
             if (verbose) {
                 const rel = outDir ? path.relative(outDir, outPath) : outPath;
                 console.log(`luau: ${rel}`);

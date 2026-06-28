@@ -114,7 +114,13 @@ export type FnAnnotation = {
 export type FileSidecar = {
     fns: Map<string, FnAnnotation>;
     native: boolean;
+    fnNative: Set<string>; // functions with @native JSDoc (annotated even without //!native file)
 };
+
+function hasJsDocTag(node: ts.Node, tagName: string): boolean {
+    const jsDocs = (node as { jsDoc?: ts.JSDoc[] }).jsDoc;
+    return jsDocs?.some(doc => doc.tags?.some(t => t.tagName.text === tagName)) ?? false;
+}
 
 export function collectSidecar(
     ts: typeof import("typescript"),
@@ -125,6 +131,7 @@ export function collectSidecar(
     const sidecar: FileSidecar = {
         fns: new Map(),
         native: /^\/\/!native\b/m.test(sourceFile.text),
+        fnNative: new Set(),
     };
 
     function visit(node: ts.Node): void {
@@ -137,6 +144,9 @@ export function collectSidecar(
 
             if (params.some(p => p !== null) || ret !== null) {
                 sidecar.fns.set(node.name.text, { params, paramNames, ret });
+            }
+            if (hasJsDocTag(node, "native")) {
+                sidecar.fnNative.add(node.name.text);
             }
         }
         ts.forEachChild(node, visit);
@@ -156,6 +166,7 @@ export function applyAnnotations(luauPath: string, sidecar: FileSidecar): void {
     let changed = false;
 
     for (const [fnName, ann] of sidecar.fns) {
+        if (!sidecar.native && !sidecar.fnNative.has(fnName)) continue;
         if (ann.params.every(p => p === null) && ann.ret === null) continue;
 
         const re = new RegExp(

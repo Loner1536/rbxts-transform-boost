@@ -90,13 +90,15 @@ function default_1(program, config = {}) {
         if (!outPath)
             return sourceFile;
         const sidecar = (0, annotate_1.collectSidecar)(typescript_1.default, program, sourceFile);
-        if (!sidecar.native)
+        if (!sidecar.native && sidecar.fnNative.size === 0)
             return sourceFile;
         pending.set(outPath, { sidecar });
         if (verbose) {
             const rel = outDir ? path.relative(outDir, outPath) : outPath;
-            const parts = ["--!native"];
-            const fnCount = sidecar.fns.size;
+            const parts = [];
+            if (sidecar.native)
+                parts.push("--!native");
+            const fnCount = sidecar.native ? sidecar.fns.size : sidecar.fnNative.size;
             if (fnCount > 0)
                 parts.push(`${fnCount} fn${fnCount !== 1 ? "s" : ""}`);
             console.log(`native: ${rel} — ${parts.join(", ")}`);

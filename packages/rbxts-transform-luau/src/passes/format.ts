@@ -330,6 +330,7 @@ export type FnDoc = {
     desc: string[];
     params: Map<string, string>;
     returns: string;
+    deprecated?: string;
 };
 
 export function injectJsDocFromSidecar(src: string, sidecar: Map<string, FnDoc>): string {
@@ -359,6 +360,7 @@ export function injectJsDocFromSidecar(src: string, sidecar: Map<string, FnDoc>)
                     ? rawRet.slice(1, -1).split(",")[0]?.trim() ?? ""
                     : rawRet;
 
+                if (doc.deprecated !== undefined) out.push(`${indent}---@deprecated${doc.deprecated ? ` ${doc.deprecated}` : ""}`);
                 for (const desc of doc.desc) out.push(`${indent}--- ${desc}`);
                 for (const [paramName, paramDesc] of doc.params) {
                     const type = paramTypes.get(paramName);
@@ -416,6 +418,7 @@ export function convertJsDocComments(src: string): string {
             const descLines: string[] = [];
             const paramTags: Array<{ name: string; desc: string }> = [];
             let returnDesc = "";
+            let deprecatedMsg: string | undefined;
 
             for (const line of cleanBody) {
                 const lc = line.toLowerCase();
@@ -425,12 +428,15 @@ export function convertJsDocComments(src: string): string {
                 } else if (lc.startsWith("@returns") || lc.startsWith("@return")) {
                     const m = line.match(/@returns?\s*(.*)/i);
                     if (m) returnDesc = m[1].trim();
+                } else if (lc.startsWith("@deprecated")) {
+                    const m = line.match(/@deprecated\s*(.*)/i);
+                    deprecatedMsg = m?.[1].trim() ?? "";
                 } else if (!lc.startsWith("@")) {
                     descLines.push(line);
                 }
             }
 
-            if (descLines.length === 0 && paramTags.length === 0 && !returnDesc) {
+            if (descLines.length === 0 && paramTags.length === 0 && !returnDesc && deprecatedMsg === undefined) {
                 out.push(lines[blockStart]);
                 for (const bl of rawBody) out.push(bl);
                 out.push(closerLine);
@@ -458,6 +464,7 @@ export function convertJsDocComments(src: string): string {
 
             const indent = funcMatch[1];
 
+            if (deprecatedMsg !== undefined) out.push(`${indent}---@deprecated${deprecatedMsg ? ` ${deprecatedMsg}` : ""}`);
             for (const desc of descLines) {
                 out.push(`${indent}--- ${desc}`);
             }

@@ -1,5 +1,7 @@
 //!native
 
+import { useImperativeHandle } from "@rbxts/react";
+
 /**
  * Adds two numbers together.
  * @param a The first number.
@@ -7,7 +9,7 @@
  * @returns The sum of a and b.
  */
 export function add(a: number, b: number): number {
-    return a + b;
+  return a + b;
 }
 
 /**
@@ -17,7 +19,7 @@ export function add(a: number, b: number): number {
  * @returns The scalar dot product.
  */
 export function dot(a: Vector3, b: Vector3): number {
-    return a.X * b.X + a.Y * b.Y + a.Z * b.Z;
+  return a.X * b.X + a.Y * b.Y + a.Z * b.Z;
 }
 
 /**
@@ -28,7 +30,7 @@ export function dot(a: Vector3, b: Vector3): number {
  * @returns The clamped value.
  */
 export function clamp(value: number, min: number, max: number): number {
-    return math.clamp(value, min, max);
+  return math.clamp(value, min, max);
 }
 
 /**
@@ -37,10 +39,19 @@ export function clamp(value: number, min: number, max: number): number {
  * @returns True if the part is anchored.
  */
 export function isAnchored(part: BasePart): boolean {
-    return part.Anchored;
+  return part.Anchored;
+}
+
+/**
+ * @deprecated Use clamp() instead.
+ * @param x The value.
+ * @returns The squared value.
+ */
+export function legacySquare(x: number): number {
+  return x * x;
 }
 
 // No JSDoc — should pass through unchanged
 export function noDoc(x: number): number {
-    return x * 2;
+  return x * 2;
 }
