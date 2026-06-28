@@ -1,6 +1,6 @@
 {
   "name": "rbxts-transform-boost",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "roblox-ts transformer: GetService hoisting, property chain caching, and loop bounds hoisting",
   "main": "out/index.js",
   "types": "out/index.d.ts",

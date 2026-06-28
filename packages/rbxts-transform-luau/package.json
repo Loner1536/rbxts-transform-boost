@@ -1,6 +1,6 @@
 {
   "name": "rbxts-transform-luau",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "roblox-ts transformer: idiomatic Luau output — preamble organization, comment cleanup, const promotion, and directive injection",
   "main": "out/index.js",
   "types": "out/index.d.ts",
