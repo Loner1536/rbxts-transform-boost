@@ -259,7 +259,7 @@ export function addSpacing(src: string): string {
         const alreadyBlank = prevTrimmed === "";
 
         if (!alreadyBlank) {
-            if (/^local function /.test(trimmed) && prevTrimmed !== "]]") {
+            if (/^local function /.test(trimmed) && prevTrimmed !== "]]" && !/^---/.test(prevTrimmed)) {
                 out.push("");
             } else if (
                 /^return\b/.test(trimmed) &&
@@ -326,6 +326,112 @@ export function castTsImports(src: string): string {
     });
 }
 
+export function convertJsDocComments(src: string): string {
+    const lines = src.split("\n");
+    const out: string[] = [];
+    let i = 0;
+
+    while (i < lines.length) {
+        const trimmed = lines[i].trim();
+
+        if (trimmed === "--[[") {
+            const blockStart = i;
+            const rawBody: string[] = [];
+            i++;
+            while (i < lines.length && lines[i].trim() !== "]]") {
+                rawBody.push(lines[i]);
+                i++;
+            }
+            const closerLine = i < lines.length ? lines[i] : "]]";
+            i++; // skip ]]
+
+            // Skip blank lines between block and next statement
+            let j = i;
+            while (j < lines.length && lines[j].trim() === "") j++;
+
+            const nextLine = j < lines.length ? lines[j] : "";
+            const funcMatch = nextLine.match(/^(\t*)local function (\w+)\(([^)]*)\)(?::\s*(.+))?$/);
+
+            if (!funcMatch) {
+                out.push(lines[blockStart]);
+                for (const bl of rawBody) out.push(bl);
+                out.push(closerLine);
+                continue;
+            }
+
+            // Strip * prefixes from JSDoc lines (rotor emits "\t * text" format)
+            const cleanBody = rawBody
+                .map(l => l.trim().replace(/^\*+\s*/, "").trim())
+                .filter(l => l !== "");
+
+            const descLines: string[] = [];
+            const paramTags: Array<{ name: string; desc: string }> = [];
+            let returnDesc = "";
+
+            for (const line of cleanBody) {
+                const lc = line.toLowerCase();
+                if (lc.startsWith("@param")) {
+                    const m = line.match(/@param\s+(\w+)(?:\s+\{[^}]*\})?\s*(.*)/i);
+                    if (m) paramTags.push({ name: m[1].trim(), desc: m[2].trim() });
+                } else if (lc.startsWith("@returns") || lc.startsWith("@return")) {
+                    const m = line.match(/@returns?\s*(.*)/i);
+                    if (m) returnDesc = m[1].trim();
+                } else if (!lc.startsWith("@")) {
+                    descLines.push(line);
+                }
+            }
+
+            if (descLines.length === 0 && paramTags.length === 0 && !returnDesc) {
+                out.push(lines[blockStart]);
+                for (const bl of rawBody) out.push(bl);
+                out.push(closerLine);
+                continue;
+            }
+
+            // Extract param types from Luau function signature
+            const paramTypes = new Map<string, string>();
+            const rawParams = funcMatch[3];
+            if (rawParams.trim()) {
+                for (const part of rawParams.split(",")) {
+                    const pm = part.trim().match(/^(\w+)(\??):\s*(.+)$/);
+                    if (pm) paramTypes.set(pm[1], pm[2] ? `${pm[3].trim()}?` : pm[3].trim());
+                }
+            }
+
+            // Extract return types from Luau function signature
+            const rawRet = funcMatch[4]?.trim() ?? "";
+            let retTypes: string[] = [];
+            if (rawRet) {
+                retTypes = rawRet.startsWith("(") && rawRet.endsWith(")")
+                    ? rawRet.slice(1, -1).split(",").map(t => t.trim()).filter(Boolean)
+                    : [rawRet];
+            }
+
+            const indent = funcMatch[1];
+
+            for (const desc of descLines) {
+                out.push(`${indent}--- ${desc}`);
+            }
+            for (const { name, desc } of paramTags) {
+                const type = paramTypes.get(name);
+                out.push(`${indent}---@param ${name}${type ? ` ${type}` : ""}${desc ? ` — ${desc}` : ""}`);
+            }
+            if (returnDesc) {
+                const retType = retTypes[0] ?? "";
+                out.push(`${indent}---@return${retType ? ` ${retType}` : ""} — ${returnDesc}`);
+            }
+
+            i = j; // skip blank lines, let function line emit normally
+            continue;
+        }
+
+        out.push(lines[i]);
+        i++;
+    }
+
+    return out.join("\n");
+}
+
 export function applyDirectives(src: string, strict: boolean, optimizeLevel: false | 0 | 1 | 2): string {
     if (strict && !src.includes("--!strict")) {
         src = "--!strict\n" + src;
@@ -357,8 +463,9 @@ export function formatFile(
     apply(s => applyDirectives(s, strict, optimizeLevel));
     apply(hoistGetService);
     apply(fixBlockCommentOpeners);
-    apply(stripUselessBlockComments);
     apply(organizePreamble);
+    apply(convertJsDocComments);
+    apply(stripUselessBlockComments);
     apply(castTsImports);
     // promoteAllTopLevelConsts must run after organizePreamble — the classifier
     // routes lines by "local" prefix; promoting first breaks section layout.

@@ -12,14 +12,14 @@
                 "verbose": true
             },
             {
-                "transform": "rbxts-transform-luau",
-                "strict": true,
-                "optimize": 2,
+                "transform": "rbxts-transform-native",
+                "types": true,
                 "verbose": true
             },
             {
-                "transform": "rbxts-transform-native",
-                "types": true,
+                "transform": "rbxts-transform-luau",
+                "strict": true,
+                "optimize": 2,
                 "verbose": true
             }
         ]
