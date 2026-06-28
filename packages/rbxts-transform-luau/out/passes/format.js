@@ -286,8 +286,8 @@ function promoteConstIfUnmutated(src, name) {
 }
 function promoteConsts(src) {
     const lines = src.split("\n");
-    // `local name =` at any indent, and `local name;` (TS.import inline pattern)
-    const declRe = /^(\t*)local ([A-Za-z_][A-Za-z0-9_]*)(?: =|;)/;
+    // Only `local name =` (value assigned at declaration) — never `local name;`
+    const declRe = /^(\t*)local ([A-Za-z_][A-Za-z0-9_]*) =/;
     const toPromote = [];
     for (let i = 0; i < lines.length; i++) {
         const m = lines[i].match(declRe);

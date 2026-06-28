@@ -51,10 +51,10 @@ const N = 100000
 local function compute()
     const scale = 0.5
     const result = scale * N
-const base; if false then base = require(...) else base = TS.import(...) :: any end
+local base; if false then base = require(...) else base = TS.import(...) :: any end
 ```
 
-Variables that are mutated (`i += 1`, reassignment, etc.) are correctly left as `local`.
+Only variables initialized inline (`local name = value`) are eligible. Imports use a deferred-assignment workaround (`local name; ... name = ...`) that requires `local` in Luau, so they are left alone. Variables that are mutated anywhere in the file (`i += 1`, reassignment, etc.) are also correctly left as `local`.
 
 ### Luau type annotations
 
