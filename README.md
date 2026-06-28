@@ -1,16 +1,16 @@
 # rbxts-transforms
 
-A collection of TypeScript transformer plugins for [roblox-ts](https://roblox-ts.com/) / [rotor](https://github.com/roblox-ts/rotor) that apply Luau-specific optimisations and cleanup at build time — no runtime cost, no code changes required.
+A collection of TypeScript transformer plugins for [roblox-ts](https://roblox-ts.com/) / [rotor](https://github.com/roblox-ts/rotor) that improve and clean up compiled Luau output at build time — no runtime cost.
 
 ## Packages
 
-| Package | Description |
-|---|---|
-| [`rbxts-transform-boost`](packages/rbxts-transform-boost) | GetService hoisting, property chain caching, loop bounds hoisting, `const` promotion |
-| [`rbxts-transform-luau`](packages/rbxts-transform-luau) | Preamble formatting, TS.import type hints, comment cleanup, `--!strict`/`--!optimize` directives |
-| [`rbxts-transform-native`](packages/rbxts-transform-native) | `--!native` injection, Luau type annotations, `const` promotion, `.d.luau` generation |
+| Package | npm | Description |
+|---|---|---|
+| [`rbxts-transform-boost`](packages/rbxts-transform-boost) | [![npm](https://img.shields.io/npm/v/rbxts-transform-boost)](https://www.npmjs.com/package/rbxts-transform-boost) | GetService hoisting, property chain caching, loop bounds hoisting, `const` promotion |
+| [`rbxts-transform-luau`](packages/rbxts-transform-luau) | [![npm](https://img.shields.io/npm/v/rbxts-transform-luau)](https://www.npmjs.com/package/rbxts-transform-luau) | Preamble formatting, TS.import type hints, JSDoc conversion, comment cleanup, `--!strict`/`--!optimize` |
+| [`rbxts-transform-native`](packages/rbxts-transform-native) | [![npm](https://img.shields.io/npm/v/rbxts-transform-native)](https://www.npmjs.com/package/rbxts-transform-native) | Luau type annotations for `//!native` files |
 
-Each package has its own README with full option docs and examples.
+Each package is independent — use any combination, in any order.
 
 ---
 
@@ -22,7 +22,7 @@ Install whichever packages you need:
 npm install --save-dev rbxts-transform-boost rbxts-transform-luau rbxts-transform-native
 ```
 
-Add them to your `tsconfig.json` plugins in order — **boost → luau → native**:
+Add them to your `tsconfig.json` plugins:
 
 ```json
 {
@@ -30,20 +30,15 @@ Add them to your `tsconfig.json` plugins in order — **boost → luau → nativ
     "plugins": [
       {
         "transform": "rbxts-transform-boost",
-        "hoist": true,
-        "verbose": true
+        "hoist": true
       },
       {
         "transform": "rbxts-transform-luau",
         "strict": true,
-        "optimize": true,
-        "optimizeLevel": 2,
-        "verbose": true
+        "optimize": 2
       },
       {
         "transform": "rbxts-transform-native",
-        "types": true,
-        "dluau": true,
         "verbose": true
       }
     ]
@@ -51,13 +46,11 @@ Add them to your `tsconfig.json` plugins in order — **boost → luau → nativ
 }
 ```
 
-All three are independent — use any combination you like.
-
 ---
 
 ## Benchmarks
 
-Measured in Roblox Studio server context. 100,000 iterations per benchmark (10,000 for `cfLookAt`). Both suites use `//!native`.
+Measured in Roblox Studio server context. 100,000 iterations per benchmark. All suites use `//!native`.
 
 | Benchmark | With | Without | Speedup | Driver |
 |---|---|---|---|---|
@@ -74,10 +67,8 @@ Measured in Roblox Studio server context. 100,000 iterations per benchmark (10,0
 ## Development
 
 ```bash
-bun install                # install all workspace dependencies
-bun run build              # build all three packages
-bun run bench:rotor        # compile bench/ with all transformers via rotor
-bun run bench:roblox-ts    # compile bench/ via roblox-ts
+bun install           # install all workspace dependencies
+bun run build         # build all three packages
+bun run bench:rotor   # compile bench/ with rotor
+bun run bench:roblox-ts  # compile bench/ with roblox-ts
 ```
-
-Open the generated `.rbxlx` in Roblox Studio and run the server to see benchmark output.

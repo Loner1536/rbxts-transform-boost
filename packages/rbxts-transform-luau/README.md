@@ -1,12 +1,22 @@
 # rbxts-transform-luau
 
-A [roblox-ts](https://roblox-ts.com) / [rotor](https://github.com/grilme99/rotor) TypeScript transformer that makes compiled Luau output idiomatic and readable — cleaning up noise, organizing the preamble, promoting constants, and injecting Luau directives.
+A [roblox-ts](https://roblox-ts.com) / [rotor](https://github.com/roblox-ts/rotor) TypeScript transformer that makes compiled Luau output idiomatic — cleaning up noise, organizing the preamble, converting JSDoc comments, and injecting Luau directives.
 
 ## What it does
 
+### Luau directives
+
+Injects `--!strict` and/or `--!optimize N` at the top of every file.
+
+```luau
+--!native
+--!optimize 2
+--!strict
+```
+
 ### Preamble organization
 
-Sorts the top of every file into clearly labeled sections: directives, services, runtime, imports, bindings.
+Sorts the top of every file into labeled sections: directives → services → runtime → imports → bindings. Makes the compiled output readable at a glance.
 
 ```luau
 --!optimize 2
@@ -21,47 +31,53 @@ const _ReplicatedStorage = game:GetService("ReplicatedStorage")
 const TS = require(_ReplicatedStorage:WaitForChild("include"):WaitForChild("RuntimeLib"))
 
 -- Imports
-local fns; if false then fns = require(_ReplicatedStorage.shared.fns) else fns = TS.import(script, _ReplicatedStorage, "shared", "fns") :: any end
+local fns; if false then fns = require(...) else fns = TS.import(...) :: any end
 ```
 
 ### TS.import type hints
 
-Wraps `TS.import` calls with a dead-code `require` branch so luau-lsp can infer the module's return type and provide autocomplete — with zero runtime cost.
+Wraps `TS.import` calls with a dead-code `require` branch so luau-lsp can infer the module's return type — zero runtime cost.
 
 ```luau
--- TS.import with full type inference for luau-lsp
+-- luau-lsp gets full autocomplete through the require branch
 local fns; if false then fns = require(_ReplicatedStorage.shared.fns) else fns = TS.import(script, _ReplicatedStorage, "shared", "fns") :: any end
 ```
 
-### `const` promotion
+### JSDoc → Luau doc comment conversion
 
-Top-level locals that are never reassigned are promoted to `const` so the Luau VM can apply read-only optimisations.
+Block comments emitted by roblox-ts/rotor that contain JSDoc tags are converted to luau-lsp doc comments (`---`) with inferred Luau types from the function signature.
 
 ```luau
--- local → const when never reassigned
-const N = 100000
-const pos = Vector3.new(1, 2, 3)
+-- Before (rotor output)
+--[[
+ *
+ * Computes the dot product.
+ * @param a first vector
+ * @param b second vector
+ * @returns scalar result
+ 
+]]
+local function dot(a: Vector3, b: Vector3): number
+
+-- After
+--- Computes the dot product.
+---@param a Vector3 — first vector
+---@param b Vector3 — second vector
+---@return number — scalar result
+local function dot(a: Vector3, b: Vector3): number
 ```
 
 ### Comment cleanup
 
-Strips useless JSDoc block comments (`@param`, `@returns`, etc.) that roblox-ts emits but serve no purpose in Luau output.
-
-### Luau directives
-
-Injects `--!strict` and `--!optimize N` at the top of every file.
+Strips useless block comments (`--[[ ]]`) that roblox-ts emits for non-function declarations where no useful information can be extracted.
 
 ## Installation
 
 ```bash
 npm install --save-dev rbxts-transform-luau
-# or
-yarn add -D rbxts-transform-luau
 ```
 
 ## Setup
-
-Add to your `tsconfig.json`:
 
 ```json
 {
@@ -70,8 +86,7 @@ Add to your `tsconfig.json`:
       {
         "transform": "rbxts-transform-luau",
         "strict": true,
-        "optimize": true,
-        "optimizeLevel": 2
+        "optimize": 2
       }
     ]
   }
@@ -81,29 +96,7 @@ Add to your `tsconfig.json`:
 ## Options
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
+|---|---|---|---|
 | `strict` | `boolean` | `false` | Inject `--!strict` at the top of every file |
-| `optimize` | `boolean` | `false` | Inject `--!optimize N` at the top of every file |
-| `optimizeLevel` | `0 \| 1 \| 2` | `1` | Optimization level (requires `optimize: true`) |
+| `optimize` | `false \| 0 \| 1 \| 2` | `false` | Inject `--!optimize N` (`false` disables, `0`/`1`/`2` set the level) |
 | `verbose` | `boolean` | `false` | Log per-file processing info to the console |
-
-## Recommended stack
-
-This transformer is designed to be used alongside:
-
-- [`rbxts-transform-boost`](https://www.npmjs.com/package/rbxts-transform-boost) — GetService and property chain hoisting
-- [`rbxts-transform-native`](https://www.npmjs.com/package/rbxts-transform-native) — `--!native` injection and Luau type annotations
-
-```json
-{
-  "compilerOptions": {
-    "plugins": [
-      { "transform": "rbxts-transform-boost", "hoist": true },
-      { "transform": "rbxts-transform-luau", "strict": true, "optimize": true, "optimizeLevel": 2 },
-      { "transform": "rbxts-transform-native", "types": true }
-    ]
-  }
-}
-```
-
-> **Order matters.** Run `rbxts-transform-boost` first, then `rbxts-transform-luau`, then `rbxts-transform-native`.

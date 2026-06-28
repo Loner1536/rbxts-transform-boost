@@ -1,87 +1,65 @@
 # rbxts-transform-native
 
-A [roblox-ts](https://roblox-ts.com) / [rotor](https://github.com/grilme99/rotor) TypeScript transformer that enables `--!native` compilation and injects Luau type annotations into emitted function signatures wherever TypeScript types map to known Luau types.
+A [roblox-ts](https://roblox-ts.com) / [rotor](https://github.com/roblox-ts/rotor) TypeScript transformer that injects Luau type annotations into compiled function signatures for files marked `//!native`.
 
 ## What it does
 
-### `--!native` injection
-
-Add `//!native` as the first line of any TypeScript file to have `--!native` injected at the top of the compiled Luau output. This opts the entire file into Luau's native code generation, which can significantly improve performance for math-heavy code.
+Files with `//!native` as the first line are opted into Luau's native code generation. This transformer reads the TypeScript types of every exported function in those files and annotates the compiled Luau signatures — letting the native compiler make stronger type assumptions and significantly improving performance.
 
 ```typescript
 //!native
 
-export function integrate(pos: Vector3, vel: Vector3, acc: Vector3, dt: number) {
-  // ...
+export function dot(a: Vector3, b: Vector3): number {
+    return a.X * b.X + a.Y * b.Y + a.Z * b.Z
+}
+
+export function clamp(x: number, min: number, max: number): number {
+    return math.clamp(x, min, max)
 }
 ```
 
 ```luau
 --!native
 
-local function integrate(pos: Vector3, vel: Vector3, acc: Vector3, dt: number): (Vector3, Vector3)
-  -- ...
+local function dot(a: Vector3, b: Vector3): number
+    ...
+end
+
+local function clamp(x: number, min: number, max: number): number
+    ...
 end
 ```
 
-### Luau type annotation injection
+Files without `//!native` are ignored entirely.
 
-TypeScript types that map to known Luau types are injected into compiled function signatures. This lets the Luau type checker and luau-lsp understand your compiled code without any manual annotation.
+## Supported types
 
-**Supported types:** `number`, `string`, `boolean`, `void`, `Vector3`, `Vector2`, `CFrame`, `Color3`, `UDim2`, `buffer`, `Instance`, `BasePart`, `Part`, `Model`, `Player`, `Camera`, `RunService`, `Players`, arrays (`T[]` → `{T}`), and tuples (`[T, U]` → `(T, U)`).
+Primitive: `number`, `string`, `boolean`, `void` → `()`
 
-```typescript
-export function dot(a: Vector3, b: Vector3): number {
-  return a.X * b.X + a.Y * b.Y + a.Z * b.Z
-}
-```
+Math types: `Vector3`, `Vector2`, `Vector2int16`, `Vector3int16`, `CFrame`, `UDim`, `UDim2`, `Color3`, `BrickColor`, `TweenInfo`, `NumberRange`, `NumberSequence`, `ColorSequence`, `Rect`, `Region3`, `Ray`
 
-```luau
--- Before (roblox-ts/rotor default output)
-local function dot(a, b)
+Other: `buffer`, `Instance`, `BasePart`, `Part`, `Model`, `Player`, `Camera`, `Workspace`, `RunService`, `Players`
 
--- After (with rbxts-transform-native)
-local function dot(a: Vector3, b: Vector3): number
-```
+Arrays: `T[]` or `Array<T>` → `{T}`
 
-### `const` promotion
+Tuples: `LuaTuple<[T, U]>` → `(T, U)` (multi-return)
 
-Variables declared with `const` in TypeScript that remain unmutated in the compiled output are promoted from `local` to Luau `const`, enabling VM read-only optimisations.
-
-### `.d.luau` declaration files
-
-When `dluau: true` is set, a `.d.luau` type declaration file is generated alongside each compiled `.luau` file, listing the types of all exported functions. Useful for pure Luau consumers of a compiled package.
-
-```luau
--- fns.d.luau (generated)
-export type integrate = (pos: Vector3, vel: Vector3, acc: Vector3, dt: number) -> (Vector3, Vector3)
-export type dot = (a: Vector3, b: Vector3) -> number
-
-export type Module = {
-    integrate: integrate,
-    dot: dot,
-}
-```
+Types not in the list above are left unannotated.
 
 ## Installation
 
 ```bash
 npm install --save-dev rbxts-transform-native
-# or
-yarn add -D rbxts-transform-native
 ```
 
 ## Setup
-
-Add to your `tsconfig.json`:
 
 ```json
 {
   "compilerOptions": {
     "plugins": [
       {
-        "transform": "rbxts-transform-native",
-        "types": true
+        "transform": "rbxts-transform-native"
       }
     ]
   }
@@ -91,48 +69,21 @@ Add to your `tsconfig.json`:
 ## Options
 
 | Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `types` | `boolean` | `true` | Inject Luau type annotations into compiled function signatures |
-| `dluau` | `boolean` | `false` | Generate `.d.luau` type declaration files alongside each `.luau` output |
-| `verbose` | `boolean` | `false` | Log per-file processing info to the console |
+|---|---|---|---|
+| `verbose` | `boolean` | `false` | Log per-file info (file path, function count) to the console |
 
 ## Usage
 
-Mark a file for native compilation by adding `//!native` as the very first line:
+Add `//!native` as the very first line of any TypeScript file you want native-compiled:
 
 ```typescript
 //!native
 
-export function fib(n: number): number {
-  let a = 0, b = 1
-  for (let i = 0; i < n; i++) {
-    [a, b] = [b, a + b]
-  }
-  return a
+export function integrate(pos: Vector3, vel: Vector3, acc: Vector3, dt: number): LuaTuple<[Vector3, Vector3]> {
+    const newVel = new Vector3(vel.X + acc.X * dt, vel.Y + acc.Y * dt, vel.Z + acc.Z * dt)
+    const newPos = new Vector3(pos.X + newVel.X * dt, pos.Y + newVel.Y * dt, pos.Z + newVel.Z * dt)
+    return $tuple(newPos, newVel)
 }
 ```
 
-The transformer will:
-1. Inject `--!native` at the top of the compiled `.luau` file
-2. Annotate `fib`'s signature: `local function fib(n: number): number`
-
-## Recommended stack
-
-This transformer is designed to be used alongside:
-
-- [`rbxts-transform-boost`](https://www.npmjs.com/package/rbxts-transform-boost) — GetService and property chain hoisting
-- [`rbxts-transform-luau`](https://www.npmjs.com/package/rbxts-transform-luau) — idiomatic Luau output formatting
-
-```json
-{
-  "compilerOptions": {
-    "plugins": [
-      { "transform": "rbxts-transform-boost", "hoist": true },
-      { "transform": "rbxts-transform-luau", "strict": true, "optimize": true, "optimizeLevel": 2 },
-      { "transform": "rbxts-transform-native", "types": true }
-    ]
-  }
-}
-```
-
-> **Order matters.** Run `rbxts-transform-boost` first, then `rbxts-transform-luau`, then `rbxts-transform-native`.
+rotor/roblox-ts preserves `//!native` as `--!native` in the Luau output. This transformer then annotates the function signatures with Luau types derived from the TypeScript source.
