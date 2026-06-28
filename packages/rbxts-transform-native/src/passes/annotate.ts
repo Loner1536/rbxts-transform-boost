@@ -113,7 +113,6 @@ export type FnAnnotation = {
 
 export type FileSidecar = {
     fns: Map<string, FnAnnotation>;
-    consts: Set<string>;
     native: boolean;
 };
 
@@ -125,7 +124,6 @@ export function collectSidecar(
     const checker = program.getTypeChecker();
     const sidecar: FileSidecar = {
         fns: new Map(),
-        consts: new Set(),
         native: /^\/\/!native\b/m.test(sourceFile.text),
     };
 
@@ -141,13 +139,6 @@ export function collectSidecar(
                 sidecar.fns.set(node.name.text, { params, paramNames, ret });
             }
         }
-        if (ts.isVariableStatement(node)) {
-            if (node.declarationList.flags & ts.NodeFlags.Const) {
-                for (const decl of node.declarationList.declarations) {
-                    if (ts.isIdentifier(decl.name)) sidecar.consts.add(decl.name.text);
-                }
-            }
-        }
         ts.forEachChild(node, visit);
     }
     visit(sourceFile);
@@ -157,58 +148,31 @@ export function collectSidecar(
 
 const writingFiles = new Set<string>();
 
-export function applyAnnotations(
-    luauPath: string,
-    sidecar: FileSidecar,
-    injectTypes: boolean,
-): void {
+export function applyAnnotations(luauPath: string, sidecar: FileSidecar): void {
     if (writingFiles.has(luauPath)) return;
     if (!fs.existsSync(luauPath)) return;
 
     let src = fs.readFileSync(luauPath, "utf8");
     let changed = false;
 
-    let nativeInjected = false;
-    let fnsAnnotated = 0;
-    let constsPromoted = 0;
+    for (const [fnName, ann] of sidecar.fns) {
+        if (ann.params.every(p => p === null) && ann.ret === null) continue;
 
-    if (sidecar.native && !src.includes("--!native")) {
-        src = "--!native\n" + src;
-        changed = true;
-        nativeInjected = true;
-    }
-
-    if (injectTypes) {
-        for (const [fnName, ann] of sidecar.fns) {
-            if (ann.params.every(p => p === null) && ann.ret === null) continue;
-
-            const re = new RegExp(
-                `(local function ${escapeRegex(fnName)}\\()([^)]*)(\\.\\.\\.)?(\\))(?:\\s*:\\s*[^\\r\\n]+)?`,
-            );
-            src = src.replace(re, (_m, open: string, rawParams: string, vararg: string | undefined, close: string) => {
-                const names = rawParams.split(",").map((s: string) => s.trim()).filter(Boolean);
-                const annotated = names.map((name: string, i: number) => {
-                    const bare = name.split(":")[0].trim();
-                    const typ = ann.params[i];
-                    return typ ? `${bare}: ${typ}` : bare;
-                });
-                if (vararg) annotated.push("...");
-                const retSuffix = ann.ret ? `: ${ann.ret}` : "";
-                changed = true;
-                fnsAnnotated++;
-                return `${open}${annotated.join(", ")}${close}${retSuffix}`;
+        const re = new RegExp(
+            `(local function ${escapeRegex(fnName)}\\()([^)]*)(\\.\\.\\.)?(\\))(?:\\s*:\\s*[^\\r\\n]+)?`,
+        );
+        src = src.replace(re, (_m, open: string, rawParams: string, vararg: string | undefined, close: string) => {
+            const names = rawParams.split(",").map((s: string) => s.trim()).filter(Boolean);
+            const annotated = names.map((name: string, i: number) => {
+                const bare = name.split(":")[0].trim();
+                const typ = ann.params[i];
+                return typ ? `${bare}: ${typ}` : bare;
             });
-        }
-
-        for (const name of sidecar.consts) {
-            const escaped = escapeRegex(name);
-            const declRe = new RegExp(`^(\\t*)local (${escaped}) =`, "m");
-            const reassignRe = new RegExp(`^\\t*${escaped}\\s*(?:\\+|-|\\*|/{1,2}|%|\\^|\\.\\.)?=(?!=)`, "m");
-            if (declRe.test(src) && !reassignRe.test(src)) {
-                const next = src.replace(declRe, `$1const $2 =`);
-                if (next !== src) { src = next; changed = true; constsPromoted++; }
-            }
-        }
+            if (vararg) annotated.push("...");
+            const retSuffix = ann.ret ? `: ${ann.ret}` : "";
+            changed = true;
+            return `${open}${annotated.join(", ")}${close}${retSuffix}`;
+        });
     }
 
     if (changed) {

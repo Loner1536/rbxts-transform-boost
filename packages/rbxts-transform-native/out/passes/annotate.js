@@ -128,7 +128,6 @@ function collectSidecar(ts, program, sourceFile) {
     const checker = program.getTypeChecker();
     const sidecar = {
         fns: new Map(),
-        consts: new Set(),
         native: /^\/\/!native\b/m.test(sourceFile.text),
     };
     function visit(node) {
@@ -140,68 +139,36 @@ function collectSidecar(ts, program, sourceFile) {
                 sidecar.fns.set(node.name.text, { params, paramNames, ret });
             }
         }
-        if (ts.isVariableStatement(node)) {
-            if (node.declarationList.flags & ts.NodeFlags.Const) {
-                for (const decl of node.declarationList.declarations) {
-                    if (ts.isIdentifier(decl.name))
-                        sidecar.consts.add(decl.name.text);
-                }
-            }
-        }
         ts.forEachChild(node, visit);
     }
     visit(sourceFile);
     return sidecar;
 }
 const writingFiles = new Set();
-function applyAnnotations(luauPath, sidecar, injectTypes) {
+function applyAnnotations(luauPath, sidecar) {
     if (writingFiles.has(luauPath))
         return;
     if (!fs.existsSync(luauPath))
         return;
     let src = fs.readFileSync(luauPath, "utf8");
     let changed = false;
-    let nativeInjected = false;
-    let fnsAnnotated = 0;
-    let constsPromoted = 0;
-    if (sidecar.native && !src.includes("--!native")) {
-        src = "--!native\n" + src;
-        changed = true;
-        nativeInjected = true;
-    }
-    if (injectTypes) {
-        for (const [fnName, ann] of sidecar.fns) {
-            if (ann.params.every(p => p === null) && ann.ret === null)
-                continue;
-            const re = new RegExp(`(local function ${escapeRegex(fnName)}\\()([^)]*)(\\.\\.\\.)?(\\))(?:\\s*:\\s*[^\\r\\n]+)?`);
-            src = src.replace(re, (_m, open, rawParams, vararg, close) => {
-                const names = rawParams.split(",").map((s) => s.trim()).filter(Boolean);
-                const annotated = names.map((name, i) => {
-                    const bare = name.split(":")[0].trim();
-                    const typ = ann.params[i];
-                    return typ ? `${bare}: ${typ}` : bare;
-                });
-                if (vararg)
-                    annotated.push("...");
-                const retSuffix = ann.ret ? `: ${ann.ret}` : "";
-                changed = true;
-                fnsAnnotated++;
-                return `${open}${annotated.join(", ")}${close}${retSuffix}`;
+    for (const [fnName, ann] of sidecar.fns) {
+        if (ann.params.every(p => p === null) && ann.ret === null)
+            continue;
+        const re = new RegExp(`(local function ${escapeRegex(fnName)}\\()([^)]*)(\\.\\.\\.)?(\\))(?:\\s*:\\s*[^\\r\\n]+)?`);
+        src = src.replace(re, (_m, open, rawParams, vararg, close) => {
+            const names = rawParams.split(",").map((s) => s.trim()).filter(Boolean);
+            const annotated = names.map((name, i) => {
+                const bare = name.split(":")[0].trim();
+                const typ = ann.params[i];
+                return typ ? `${bare}: ${typ}` : bare;
             });
-        }
-        for (const name of sidecar.consts) {
-            const escaped = escapeRegex(name);
-            const declRe = new RegExp(`^(\\t*)local (${escaped}) =`, "m");
-            const reassignRe = new RegExp(`^\\t*${escaped}\\s*(?:\\+|-|\\*|/{1,2}|%|\\^|\\.\\.)?=(?!=)`, "m");
-            if (declRe.test(src) && !reassignRe.test(src)) {
-                const next = src.replace(declRe, `$1const $2 =`);
-                if (next !== src) {
-                    src = next;
-                    changed = true;
-                    constsPromoted++;
-                }
-            }
-        }
+            if (vararg)
+                annotated.push("...");
+            const retSuffix = ann.ret ? `: ${ann.ret}` : "";
+            changed = true;
+            return `${open}${annotated.join(", ")}${close}${retSuffix}`;
+        });
     }
     if (changed) {
         writingFiles.add(luauPath);

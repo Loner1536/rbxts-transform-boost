@@ -65,7 +65,7 @@ let finalizeRegistered = false;
 function flushPending() {
     for (const [outPath, meta] of pending) {
         try {
-            (0, annotate_1.applyAnnotations)(outPath, meta.sidecar, meta.injectTypes);
+            (0, annotate_1.applyAnnotations)(outPath, meta.sidecar);
         }
         catch {
             // silently skip — file stays as-is
@@ -80,7 +80,7 @@ function registerFinalizer() {
     process.on("exit", flushPending);
 }
 function default_1(program, config = {}) {
-    const { types: injectTypes = true, verbose = false } = config;
+    const { verbose = false } = config;
     const outDir = program.getCompilerOptions().outDir;
     // Watch mode: flush previous run before starting this one.
     flushPending();
@@ -92,18 +92,13 @@ function default_1(program, config = {}) {
         const sidecar = (0, annotate_1.collectSidecar)(typescript_1.default, program, sourceFile);
         if (!sidecar.native)
             return sourceFile;
-        pending.set(outPath, { sidecar, injectTypes });
+        pending.set(outPath, { sidecar });
         if (verbose) {
             const rel = outDir ? path.relative(outDir, outPath) : outPath;
             const parts = ["--!native"];
-            if (injectTypes) {
-                const fnCount = sidecar.fns.size;
-                const constCount = sidecar.consts.size;
-                if (fnCount > 0)
-                    parts.push(`${fnCount} fn${fnCount !== 1 ? "s" : ""}`);
-                if (constCount > 0)
-                    parts.push(`${constCount} const${constCount !== 1 ? "s" : ""}`);
-            }
+            const fnCount = sidecar.fns.size;
+            if (fnCount > 0)
+                parts.push(`${fnCount} fn${fnCount !== 1 ? "s" : ""}`);
             console.log(`native: ${rel} — ${parts.join(", ")}`);
         }
         return sourceFile;

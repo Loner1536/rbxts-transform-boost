@@ -31,13 +31,13 @@ function commonRoot(files: readonly string[]): string | undefined {
     return root.join(path.sep) || undefined;
 }
 
-const pending = new Map<string, { sidecar: FileSidecar; injectTypes: boolean }>();
+const pending = new Map<string, { sidecar: FileSidecar }>();
 let finalizeRegistered = false;
 
 function flushPending(): void {
     for (const [outPath, meta] of pending) {
         try {
-            applyAnnotations(outPath, meta.sidecar, meta.injectTypes);
+            applyAnnotations(outPath, meta.sidecar);
         } catch {
             // silently skip — file stays as-is
         }
@@ -55,7 +55,7 @@ export default function (
     program: ts.Program,
     config: PluginConfig = {},
 ): ts.TransformerFactory<ts.SourceFile> {
-    const { types: injectTypes = true, verbose = false } = config;
+    const { verbose = false } = config;
     const outDir = program.getCompilerOptions().outDir;
 
     // Watch mode: flush previous run before starting this one.
@@ -69,17 +69,13 @@ export default function (
         const sidecar = collectSidecar(ts, program, sourceFile);
         if (!sidecar.native) return sourceFile;
 
-        pending.set(outPath, { sidecar, injectTypes });
+        pending.set(outPath, { sidecar });
 
         if (verbose) {
             const rel = outDir ? path.relative(outDir, outPath) : outPath;
             const parts: string[] = ["--!native"];
-            if (injectTypes) {
-                const fnCount = sidecar.fns.size;
-                const constCount = sidecar.consts.size;
-                if (fnCount > 0) parts.push(`${fnCount} fn${fnCount !== 1 ? "s" : ""}`);
-                if (constCount > 0) parts.push(`${constCount} const${constCount !== 1 ? "s" : ""}`);
-            }
+            const fnCount = sidecar.fns.size;
+            if (fnCount > 0) parts.push(`${fnCount} fn${fnCount !== 1 ? "s" : ""}`);
             console.log(`native: ${rel} — ${parts.join(", ")}`);
         }
 

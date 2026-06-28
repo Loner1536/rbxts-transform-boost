@@ -13,7 +13,6 @@
             },
             {
                 "transform": "rbxts-transform-native",
-                "types": true,
                 "verbose": true
             },
             {

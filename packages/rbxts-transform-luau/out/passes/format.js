@@ -479,9 +479,6 @@ function formatFile(luauPath, strict, optimizeLevel) {
     apply(convertJsDocComments);
     apply(stripUselessBlockComments);
     apply(castTsImports);
-    // promoteAllTopLevelConsts must run after organizePreamble — the classifier
-    // routes lines by "local" prefix; promoting first breaks section layout.
-    apply(promoteAllTopLevelConsts);
     apply(addSpacing);
     if (changed) {
         writingFiles.add(luauPath);
