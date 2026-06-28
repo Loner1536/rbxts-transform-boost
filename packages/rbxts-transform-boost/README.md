@@ -56,34 +56,50 @@ for i = 0, _size - 1 do
 
 ## Benchmarks
 
-Measured in Roblox Studio server context, 100,000 iterations per benchmark (10,000 for CFrame constructors). Both suites use `//!native`. Compiled with roblox-ts.
+Measured on a **live Roblox server** (published baseplate), 100,000 iterations per benchmark (10,000 for CFrame constructors). Both suites use `//!native`. Compiled with roblox-ts.
 
-**With transformer** = GetService hoisting + property chain caching + `--!strict` + `--!optimize 2` + type annotations  
+**With transformer** = GetService hoisting + property chain caching + `--!strict` + `--!optimize 2` + type annotations (via `rbxts-transform-luau`)
 **Without transformer** = raw roblox-ts output (`//!native` only)
+
+You can run the benchmark yourself: [Boost Transformer Bench](https://www.roblox.com/games/125084893596995/Boost-Transformer-Bench)
 
 ### GetService hoisting
 
 | Benchmark | With | Without | Speedup |
 |---|---|---|---|
-| svc ×1 (baseline) | 0.158 µs | 0.432 µs | **2.7×** |
-| svc ×2 (same service) | 0.276 µs | 0.686 µs | **2.5×** |
-| svc ×3 (diff services) | 0.459 µs | 1.103 µs | **2.4×** |
+| svc ×1 (baseline) | 0.112 µs | 0.320 µs | **2.9×** |
+| svc ×2 (same service) | 0.198 µs | 0.614 µs | **3.1×** |
+| svc ×3 (diff services) | 0.301 µs | 0.878 µs | **2.9×** |
 
 ### Property chain caching
 
 | Benchmark | With | Without | Speedup |
 |---|---|---|---|
-| cam.CFrame ×3 | 0.854 µs | 0.761 µs | — |
-| cam.CFrame.Position ×3 | 0.771 µs | 1.425 µs | **1.8×** |
+| cam.CFrame ×3 | 0.454 µs | 0.494 µs | 1.1× |
+| cam.CFrame.Position ×3 | 0.443 µs | 0.885 µs | **2.0×** |
 
 ### Vector3 field hoisting
 
 | Benchmark | With | Without | Speedup |
 |---|---|---|---|
-| dot (×1 each field, control) | 0.082 µs | 0.166 µs | **2.0×** |
-| cross (×2 each field) | 0.082 µs | 0.212 µs | **2.6×** |
-| lerp (×2 each field) | 0.081 µs | 0.191 µs | **2.4×** |
-| integrate (method calls) | 0.083 µs | 0.124 µs | **1.5×** |
+| dot (×1 each field) | 0.062 µs | 0.099 µs | **1.6×** |
+| cross (×2 each field) | 0.057 µs | 0.151 µs | **2.6×** |
+| lerp (×2 each field) | 0.054 µs | 0.126 µs | **2.3×** |
+| integrate (method calls) | 0.056 µs | 0.075 µs | 1.3× |
+
+### Loop bounds hoisting
+
+| Benchmark | With | Without | Speedup |
+|---|---|---|---|
+| sumArray (size ×1) | 0.120 µs | 0.106 µs | — |
+| weightedSum (size ×1) | 0.135 µs | 0.116 µs | — |
+
+### CFrame
+
+| Benchmark | With | Without | Speedup |
+|---|---|---|---|
+| cfLookAt (ctor) | 0.146 µs | 0.142 µs | — |
+| cfChain (mul+angles) | 0.158 µs | 0.160 µs | — |
 
 ## Installation
 

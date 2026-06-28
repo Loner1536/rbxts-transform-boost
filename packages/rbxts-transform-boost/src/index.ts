@@ -34,9 +34,6 @@ function commonRoot(files: readonly string[]): string | undefined {
     return root.join(path.sep) || undefined;
 }
 
-// Moves --! directive lines to the top of the file, above everything except
-// other --! lines. Fixes the case where cachePass prepends service locals
-// before --!native or other directives that were leading comments in the source.
 function liftDirectives(src: string): string {
     const lines = src.split("\n");
     const directives: string[] = [];
@@ -49,9 +46,6 @@ function liftDirectives(src: string): string {
     return [...directives, ...rest].join("\n");
 }
 
-// Hoists repeated game:GetService("X") calls (≥2 uses) to local declarations
-// at the top of the file. Handles the roblox-ts/rotor runtime lines that the
-// compiler emits after our AST pass runs, which the AST pass can never see.
 function hoistServices(src: string): string {
     const re = /game:GetService\("([^"]+)"\)/g;
     const counts = new Map<string, number>();
@@ -73,7 +67,6 @@ function hoistServices(src: string): string {
         src = src.split(`game:GetService("${svc}")`).join(`_${svc}`);
     }
 
-    // Insert after any --! directives and -- Compiled header lines.
     const lines = src.split("\n");
     let insertAt = 0;
     for (let i = 0; i < lines.length; i++) {
@@ -92,40 +85,66 @@ function hoistServices(src: string): string {
 
 const pendingPaths = new Set<string>();
 const writingFiles = new Set<string>();
-let finalizeRegistered = false;
+// dir path → watcher, shared across files in the same dir
+const dirWatchers = new Map<string, fs.FSWatcher>();
+
+function processFile(outPath: string): void {
+    if (!fs.existsSync(outPath)) return;
+    try {
+        let src = fs.readFileSync(outPath, "utf8");
+        let changed = false;
+
+        const afterHoist = hoistServices(src);
+        if (afterHoist !== src) { src = afterHoist; changed = true; }
+
+        const afterLift = liftDirectives(src);
+        if (afterLift !== src) { src = afterLift; changed = true; }
+
+        if (changed) {
+            writingFiles.add(outPath);
+            try {
+                fs.writeFileSync(outPath, src, "utf8");
+            } finally {
+                setTimeout(() => writingFiles.delete(outPath), 50).unref();
+            }
+        }
+    } catch {
+        // leave file as-is on error
+    }
+}
+
+function watchDir(dir: string): void {
+    if (dirWatchers.has(dir)) return;
+    try {
+        const watcher = fs.watch(dir, { persistent: false }, (_event, filename) => {
+            if (!filename) return;
+            const outPath = path.join(dir, filename);
+            if (!pendingPaths.has(outPath)) return;
+            if (writingFiles.has(outPath)) return;
+            pendingPaths.delete(outPath);
+            processFile(outPath);
+            // clean up watcher if no more pending files in this dir
+            const stillPending = [...pendingPaths].some(p => path.dirname(p) === dir);
+            if (!stillPending) {
+                watcher.close();
+                dirWatchers.delete(dir);
+            }
+        });
+        dirWatchers.set(dir, watcher);
+    } catch {
+        // dir may not exist yet — fall back to exit handler
+    }
+}
 
 function flushPending(): void {
     for (const outPath of pendingPaths) {
-        if (!fs.existsSync(outPath)) continue;
-        try {
-            let src = fs.readFileSync(outPath, "utf8");
-            let changed = false;
-
-            const afterHoist = hoistServices(src);
-            if (afterHoist !== src) { src = afterHoist; changed = true; }
-
-            const afterLift = liftDirectives(src);
-            if (afterLift !== src) { src = afterLift; changed = true; }
-
-            if (changed) {
-                writingFiles.add(outPath);
-                try {
-                    fs.writeFileSync(outPath, src, "utf8");
-                } finally {
-                    setTimeout(() => writingFiles.delete(outPath), 50).unref();
-                }
-            }
-        } catch {
-            // leave file as-is on error
-        }
+        processFile(outPath);
     }
     pendingPaths.clear();
-}
-
-function registerFinalizer(): void {
-    if (finalizeRegistered) return;
-    finalizeRegistered = true;
-    process.on("exit", flushPending);
+    for (const [dir, watcher] of dirWatchers) {
+        watcher.close();
+        dirWatchers.delete(dir);
+    }
 }
 
 export default function (
@@ -136,18 +155,20 @@ export default function (
     const dbg = createDebugger(program, verbose);
     const outDir = program.getCompilerOptions().outDir;
 
-    // Watch mode: flush previous run before starting this one.
-    flushPending();
-    registerFinalizer();
+    // Safety net: flush any files that weren't caught by the dir watcher
+    // (e.g. if the watcher fired before the file was fully written).
+    // Also handles the last cycle when the process exits.
+    process.on("exit", flushPending);
 
     return (_ctx) => (sourceFile) => {
         const errors: string[] = [];
         let cached = 0;
 
-        // Always queue for post-emit — roblox-ts emits its own GetService calls
-        // in the runtime require and TS.import lines after our AST pass finishes.
         const outPath = outPathForSource(sourceFile, program);
-        if (outPath && hoist) pendingPaths.add(outPath);
+        if (outPath && hoist) {
+            pendingPaths.add(outPath);
+            watchDir(path.dirname(outPath));
+        }
         const rel = outPath && outDir ? path.relative(outDir, outPath) : sourceFile.fileName;
 
         if (!hoist) {

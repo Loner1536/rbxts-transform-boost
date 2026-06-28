@@ -1,4 +1,5 @@
 import ts from "typescript";
+import * as fs from "fs";
 import * as path from "path";
 import type { PluginConfig } from "./config";
 import { formatFile, type FnDoc, type FnTypes } from "./passes/format";
@@ -149,23 +150,56 @@ type FileMeta = {
 };
 
 const pending = new Map<string, FileMeta>();
-let finalizeRegistered = false;
+const writingFiles = new Set<string>();
+// dir path → watcher, shared across files in the same dir
+const dirWatchers = new Map<string, fs.FSWatcher>();
+
+function processFile(meta: FileMeta): void {
+    try {
+        formatFile(meta.outPath, meta.strict, meta.optimizeLevel, meta.sidecar, meta.annotate ? meta.types : new Map());
+    } catch {
+        // silently skip files that fail — they stay as-is
+    }
+}
+
+function watchDir(dir: string): void {
+    if (dirWatchers.has(dir)) return;
+    try {
+        const watcher = fs.watch(dir, { persistent: false }, (_event, filename) => {
+            if (!filename) return;
+            const outPath = path.join(dir, filename);
+            const meta = pending.get(outPath);
+            if (!meta) return;
+            if (writingFiles.has(outPath)) return;
+            pending.delete(outPath);
+            writingFiles.add(outPath);
+            try {
+                processFile(meta);
+            } finally {
+                setTimeout(() => writingFiles.delete(outPath), 50).unref();
+            }
+            // clean up watcher if no more pending files in this dir
+            const stillPending = [...pending.keys()].some(p => path.dirname(p) === dir);
+            if (!stillPending) {
+                watcher.close();
+                dirWatchers.delete(dir);
+            }
+        });
+        dirWatchers.set(dir, watcher);
+    } catch {
+        // dir may not exist yet — fall back to exit handler
+    }
+}
 
 function flushPending(): void {
     for (const [, meta] of pending) {
-        try {
-            formatFile(meta.outPath, meta.strict, meta.optimizeLevel, meta.sidecar, meta.annotate ? meta.types : new Map());
-        } catch {
-            // silently skip files that fail — they stay as-is
-        }
+        processFile(meta);
     }
     pending.clear();
-}
-
-function registerFinalizer(): void {
-    if (finalizeRegistered) return;
-    finalizeRegistered = true;
-    process.on("exit", flushPending);
+    for (const [dir, watcher] of dirWatchers) {
+        watcher.close();
+        dirWatchers.delete(dir);
+    }
 }
 
 function jsDocText(comment: ts.JSDoc["comment"]): string {
@@ -221,12 +255,11 @@ export default function (
     const { strict = true, optimize = false, annotate = true, verbose = false } = config;
     const optimizeLevel: false | 0 | 1 | 2 = optimize === false ? false : ([0, 1, 2] as const).includes(optimize as 0|1|2) ? optimize : 2;
 
-    // Watch mode: flush the previous run's pending files before starting this one.
-    flushPending();
-    registerFinalizer();
+    // Safety net: flush any files that weren't caught by the dir watcher.
+    // Also handles the last cycle when the process exits.
+    process.on("exit", flushPending);
 
     const outDir = program.getCompilerOptions().outDir;
-
     const checker = annotate ? program.getTypeChecker() : null;
 
     return (_ctx) => (sourceFile) => {
@@ -235,6 +268,7 @@ export default function (
             const sidecar = collectJsDoc(ts, sourceFile);
             const types = checker ? collectTypes(checker, sourceFile) : new Map<string, FnTypes>();
             pending.set(outPath, { outPath, strict, optimizeLevel, annotate, verbose, sidecar, types });
+            watchDir(path.dirname(outPath));
             if (verbose) {
                 const rel = outDir ? path.relative(outDir, outPath) : outPath;
                 console.log(`luau: ${rel}`);
