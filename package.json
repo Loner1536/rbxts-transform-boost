@@ -2,15 +2,20 @@
   "name": "rbxts-transform-boost-workspace",
   "private": true,
   "workspaces": [
-    "transformer",
+    "packages/*",
     "bench"
   ],
   "scripts": {
-    "build": "bun run --cwd transformer build",
-    "bench:rotor": "bun run build && cd bench && rotor build -p tsconfig.rotor.json --rojo rotor.project.json && rotor build -p tsconfig.notransform.rotor.json --rojo rotor.project.json",
-    "bench:roblox-ts": "bun run build && cd bench && bunx rbxtsc -p tsconfig.roblox-ts.json --rojo roblox-ts.project.json && bunx rbxtsc -p tsconfig.notransform.roblox-ts.json --rojo roblox-ts.project.json",
-    "bench:rbxlx:rotor": "bun run bench:rotor && cd bench && rojo build rotor.project.json -o benchmark-rotor.rbxlx",
-    "bench:rbxlx:roblox-ts": "bun run bench:roblox-ts && cd bench && rojo build roblox-ts.project.json -o benchmark-roblox-ts.rbxlx"
+    "build": "bun run --cwd packages/rbxts-transform-boost build && bun run --cwd packages/rbxts-transform-luau build && bun run --cwd packages/rbxts-transform-native build",
+    "build:boost": "bun run --cwd packages/rbxts-transform-boost build",
+    "build:luau": "bun run --cwd packages/rbxts-transform-luau build",
+    "build:native": "bun run --cwd packages/rbxts-transform-native build",
+    "bench:rotor": "bun run build && cd bench/rotor && rotor build -p tsconfig.json --rojo default.project.json && rotor build -p tsconfig.notransform.json --rojo default.project.json",
+    "bench:roblox-ts": "bun run build && cd bench/roblox-ts && bunx rbxtsc -p tsconfig.json --rojo roblox-ts.project.json && bunx rbxtsc -p tsconfig.notransform.json --rojo roblox-ts.project.json",
+    "bench:rbxlx:rotor": "bun run bench:rotor && cd bench/rotor && rojo build default.project.json -o benchmark-rotor.rbxlx",
+    "bench:rbxlx:roblox-ts": "bun run bench:roblox-ts && cd bench/roblox-ts && rojo build roblox-ts.project.json -o benchmark-roblox-ts.rbxlx",
+    "sourcemap": "cd bench/rotor && rojo sourcemap default.project.json -o sourcemap.json",
+    "sourcemap:watch": "cd bench/rotor && rojo sourcemap default.project.json -o sourcemap.json --watch"
   },
   "devDependencies": {
     "@types/node": "^26.0.0",

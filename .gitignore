@@ -1,9 +1,11 @@
 node_modules/
-**/node_modules/
+**/node_modules
 
-out/
-**/out/
+# out/
+# **/out/
 
+bench/rotor/out/
+bench/roblox-ts/out/
 bench/*.rbxlx
 
 package-lock.json

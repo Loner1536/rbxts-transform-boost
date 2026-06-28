@@ -1,0 +1,37 @@
+{
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+        "moduleResolution": "Node",
+        "rootDir": "../src",
+        "outDir": "./out/src",
+        "typeRoots": ["./node_modules/@rbxts"],
+        "plugins": [
+            {
+                "transform": "rbxts-transform-boost",
+                "hoist": true,
+                "verbose": true
+            },
+            {
+                "transform": "rbxts-transform-luau",
+                "strict": true,
+                "optimize": true,
+                "optimizeLevel": 2,
+                "verbose": true
+            },
+            {
+                "transform": "rbxts-transform-native",
+                "types": true,
+                "dluau": true,
+                "verbose": true
+            }
+        ]
+    },
+    "include": [
+        "../src/server",
+        "../src/shared/tests",
+        "../src/shared/fns.ts"
+    ],
+    "rbxts": {
+        "includePath": "out/include"
+    }
+}

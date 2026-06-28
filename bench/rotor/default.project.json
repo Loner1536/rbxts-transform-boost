@@ -1,0 +1,24 @@
+{
+  "name": "perf-benchmark-rotor",
+  "emitLegacyScripts": false,
+  "tree": {
+    "$className": "DataModel",
+    "ServerScriptService": {
+      "$path": "out/src/server"
+    },
+    "ReplicatedStorage": {
+      "shared": {
+        "$path": "out/src/shared"
+      },
+      "include": {
+        "$path": "out/include",
+        "node_modules": {
+          "$className": "Folder",
+          "@rbxts": {
+            "$path": "node_modules/@rbxts"
+          }
+        }
+      }
+    }
+  }
+}

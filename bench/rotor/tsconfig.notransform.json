@@ -1,0 +1,15 @@
+{
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+        "moduleResolution": "Node",
+        "rootDir": "../src",
+        "outDir": "./out/src",
+        "typeRoots": ["./node_modules/@rbxts"]
+    },
+    "include": [
+        "../src/shared/fns-bare.ts"
+    ],
+    "rbxts": {
+        "includePath": "out/include"
+    }
+}

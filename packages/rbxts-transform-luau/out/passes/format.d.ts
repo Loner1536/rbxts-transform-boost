@@ -1,0 +1,10 @@
+export declare function stripUselessBlockComments(src: string): string;
+export declare function fixBlockCommentOpeners(src: string): string;
+export declare function organizePreamble(src: string): string;
+export declare function hoistGetService(src: string): string;
+export declare function promoteConstIfUnmutated(src: string, name: string): string;
+export declare function promoteAllTopLevelConsts(src: string): string;
+export declare function addSpacing(src: string): string;
+export declare function castTsImports(src: string): string;
+export declare function applyDirectives(src: string, strict: boolean, optimize: boolean, optimizeLevel: 0 | 1 | 2): string;
+export declare function formatFile(luauPath: string, strict: boolean, optimize: boolean, optimizeLevel: 0 | 1 | 2): void;
