@@ -1,0 +1,31 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./roblox-ts/out/src",
+    "typeRoots": ["./node_modules/@rbxts", "./roblox-ts/node_modules/@rbxts"],
+    "plugins": [
+      {
+        "transform": "rbxts-transform-boost",
+        "hoist": true,
+        "verbose": true
+      },
+      {
+        "transform": "rbxts-transform-luau",
+        "strict": true,
+        "optimize": 2,
+        "verbose": true
+      }
+    ]
+  },
+  "include": [
+    "./src/server/**/*.ts",
+    "./src/shared/tests/**/*.ts",
+    "./src/shared/fns.ts"
+  ],
+  "exclude": ["node_modules", "rotor/out", "roblox-ts/out"],
+  "rbxts": {
+    "includePath": "roblox-ts/out/include",
+    "rojo": "roblox-ts/default.project.json"
+  }
+}

@@ -1,10 +1,10 @@
 {
-  "extends": "../tsconfig.json",
+  "extends": "./tsconfig.json",
   "compilerOptions": {
     "moduleResolution": "Node",
-    "rootDir": "../src",
-    "outDir": "./out/src",
-    "typeRoots": ["./node_modules/@rbxts"],
+    "rootDir": "./src",
+    "outDir": "./rotor/out/src",
+    "typeRoots": ["./node_modules/@rbxts", "./rotor/node_modules/@rbxts"],
     "plugins": [
       {
         "transform": "rbxts-transform-boost",
@@ -19,8 +19,9 @@
       }
     ]
   },
-  "include": ["../src/server", "../src/shared/tests", "../src/shared/fns.ts"],
+  "include": ["./src/server", "./src/shared/tests", "./src/shared/fns.ts"],
   "rbxts": {
-    "includePath": "out/include"
+    "includePath": "rotor/out/include",
+    "rojo": "rotor/default.project.json"
   }
 }
