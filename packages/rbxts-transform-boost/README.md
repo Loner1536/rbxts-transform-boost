@@ -1,6 +1,6 @@
 # rbxts-transform-boost
 
-A [roblox-ts](https://roblox-ts.com) / [rotor](https://github.com/roblox-ts/rotor) TypeScript transformer that improves compiled Luau performance by hoisting repeated expressions, caching property chains, and promoting locals to `const`.
+A [roblox-ts](https://roblox-ts.com) / [rotor](https://github.com/roblox-ts/rotor) TypeScript transformer that improves compiled Luau performance by hoisting repeated expressions and caching property chains.
 
 ## What it does
 
@@ -16,7 +16,7 @@ function b() { return game.GetService("RunService").IsRunning }
 
 ```luau
 -- Output
-local _RunService = game:GetService("RunService")
+const _RunService = game:GetService("RunService")
 
 local function a() return _RunService.Heartbeat end
 local function b() return _RunService.IsRunning end
@@ -35,9 +35,9 @@ for (let i = 0; i < n; i++) {
 
 ```luau
 -- Output
-local _CFrame = workspace.CurrentCamera.CFrame
+const _CFrame = workspace.CurrentCamera.CFrame
 for i = 0, n - 1 do
-    local pos = _CFrame.Position
+    const pos = _CFrame.Position
 end
 ```
 
@@ -54,33 +54,18 @@ const _size = someTable:size()
 for i = 0, _size - 1 do
 ```
 
-### `const` promotion
-
-Locals that are never reassigned — at any nesting depth — are promoted to `const`, allowing the Luau native compiler to make stronger assumptions.
-
-```luau
--- Before
-local N = 100000
-local function compute()
-    local scale = 0.5
-
--- After
-const N = 100000
-local function compute()
-    const scale = 0.5
-```
-
 ## Benchmarks
 
-Measured in Roblox Studio server context, 100,000 iterations per benchmark. All suites use `//!native`.
+Measured in Roblox Studio server context, 100,000 iterations per benchmark. Both suites use `//!native`. Compiled with roblox-ts.
 
 | Benchmark | With | Without | Speedup | Driver |
 |---|---|---|---|---|
-| cross (V3 manual) | 0.024 µs | 0.072 µs | **3.0×** | 6× field hoisting |
-| lerpVec3 (V3 manual) | 0.026 µs | 0.061 µs | **2.3×** | 3× field hoisting |
-| multiSvc (GetService ×3) | 0.154 µs | 0.505 µs | **3.3×** | GetService hoisting |
-| serviceWork (GetService ×2) | 0.243 µs | 0.481 µs | **2.0×** | GetService hoisting |
-| cameraWork (prop chain) | 0.185 µs | 0.218 µs | **1.2×** | `camera.CFrame` hoisted |
+| integrate (verlet) | 0.084 µs | 0.171 µs | **2.0×** | Vector3 field hoisting |
+| dot (V3 manual) | 0.082 µs | 0.192 µs | **2.3×** | Vector3 field hoisting |
+| cross (V3 manual) | 0.089 µs | 0.256 µs | **2.9×** | Vector3 field hoisting |
+| lerpVec3 (V3 manual) | 0.081 µs | 0.217 µs | **2.7×** | Vector3 field hoisting |
+| serviceWork (GetService ×2) | 0.450 µs | 0.905 µs | **2.0×** | GetService hoisting |
+| multiSvc (GetService ×3) | 0.405 µs | 1.062 µs | **2.6×** | GetService hoisting |
 
 ## Installation
 

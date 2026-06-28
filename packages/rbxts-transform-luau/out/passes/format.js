@@ -286,15 +286,15 @@ function promoteConstIfUnmutated(src, name) {
 }
 function promoteConsts(src) {
     const lines = src.split("\n");
-    // Match any `local name =` at any indent level (not `local function`)
-    const declRe = /^(\t*)local ([A-Za-z_][A-Za-z0-9_]*) =/;
+    // `local name =` at any indent, and `local name;` (TS.import inline pattern)
+    const declRe = /^(\t*)local ([A-Za-z_][A-Za-z0-9_]*)(?: =|;)/;
     const toPromote = [];
     for (let i = 0; i < lines.length; i++) {
         const m = lines[i].match(declRe);
         if (!m)
             continue;
         const name = m[2];
-        // A mutation is any bare assignment to this name anywhere in the file after declaration
+        // Any reassignment to this name on lines AFTER the declaration line
         const mutRe = new RegExp(`(?:^|\\t)${escapeRegex(name)}\\s*(?:[+\\-*/%^]|\\.\\.|/{1,2})?=(?!=)`);
         let mutated = false;
         for (let j = i + 1; j < lines.length; j++) {
@@ -553,11 +553,11 @@ function formatFile(luauPath, strict, optimizeLevel, sidecar = new Map(), types 
     apply(fixBlockCommentOpeners);
     apply(organizePreamble);
     apply(s => injectTypeAnnotations(s, types));
+    apply(castTsImports);
     apply(promoteConsts);
     apply(convertJsDocComments);
     apply(s => injectJsDocFromSidecar(s, sidecar));
     apply(stripUselessBlockComments);
-    apply(castTsImports);
     apply(addSpacing);
     if (changed) {
         writingFiles.add(luauPath);
