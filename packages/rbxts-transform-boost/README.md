@@ -56,16 +56,34 @@ for i = 0, _size - 1 do
 
 ## Benchmarks
 
-Measured in Roblox Studio server context, 100,000 iterations per benchmark. Both suites use `//!native`. Compiled with roblox-ts.
+Measured in Roblox Studio server context, 100,000 iterations per benchmark (10,000 for CFrame constructors). Both suites use `//!native`. Compiled with roblox-ts.
 
-| Benchmark | With | Without | Speedup | Driver |
-|---|---|---|---|---|
-| integrate (verlet) | 0.084 µs | 0.171 µs | **2.0×** | Vector3 field hoisting |
-| dot (V3 manual) | 0.082 µs | 0.192 µs | **2.3×** | Vector3 field hoisting |
-| cross (V3 manual) | 0.089 µs | 0.256 µs | **2.9×** | Vector3 field hoisting |
-| lerpVec3 (V3 manual) | 0.081 µs | 0.217 µs | **2.7×** | Vector3 field hoisting |
-| serviceWork (GetService ×2) | 0.450 µs | 0.905 µs | **2.0×** | GetService hoisting |
-| multiSvc (GetService ×3) | 0.405 µs | 1.062 µs | **2.6×** | GetService hoisting |
+**With transformer** = GetService hoisting + property chain caching + `--!strict` + `--!optimize 2` + type annotations  
+**Without transformer** = raw roblox-ts output (`//!native` only)
+
+### GetService hoisting
+
+| Benchmark | With | Without | Speedup |
+|---|---|---|---|
+| svc ×1 (baseline) | 0.158 µs | 0.432 µs | **2.7×** |
+| svc ×2 (same service) | 0.276 µs | 0.686 µs | **2.5×** |
+| svc ×3 (diff services) | 0.459 µs | 1.103 µs | **2.4×** |
+
+### Property chain caching
+
+| Benchmark | With | Without | Speedup |
+|---|---|---|---|
+| cam.CFrame ×3 | 0.854 µs | 0.761 µs | — |
+| cam.CFrame.Position ×3 | 0.771 µs | 1.425 µs | **1.8×** |
+
+### Vector3 field hoisting
+
+| Benchmark | With | Without | Speedup |
+|---|---|---|---|
+| dot (×1 each field, control) | 0.082 µs | 0.166 µs | **2.0×** |
+| cross (×2 each field) | 0.082 µs | 0.212 µs | **2.6×** |
+| lerp (×2 each field) | 0.081 µs | 0.191 µs | **2.4×** |
+| integrate (method calls) | 0.083 µs | 0.124 µs | **1.5×** |
 
 ## Installation
 

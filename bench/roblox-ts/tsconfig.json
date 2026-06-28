@@ -23,8 +23,5 @@
     "../src/shared/tests/**/*.ts",
     "../src/shared/fns.ts"
   ],
-  "exclude": ["node_modules", "out"],
-  "rbxts": {
-    "includePath": "out/include"
-  }
+  "exclude": ["node_modules", "out"]
 }
