@@ -326,6 +326,57 @@ export function castTsImports(src: string): string {
     });
 }
 
+export type FnDoc = {
+    desc: string[];
+    params: Map<string, string>;
+    returns: string;
+};
+
+export function injectJsDocFromSidecar(src: string, sidecar: Map<string, FnDoc>): string {
+    if (sidecar.size === 0) return src;
+    const lines = src.split("\n");
+    const out: string[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+        const funcMatch = lines[i].match(/^(\t*)local function (\w+)\(([^)]*)\)(?::\s*(.+))?$/);
+        if (funcMatch) {
+            const name = funcMatch[2];
+            const doc = sidecar.get(name);
+            const prevTrimmed = out.length > 0 ? out[out.length - 1].trim() : "";
+            const alreadyHasDoc = /^---/.test(prevTrimmed);
+
+            if (doc && !alreadyHasDoc) {
+                const indent = funcMatch[1];
+                const paramTypes = new Map<string, string>();
+                if (funcMatch[3].trim()) {
+                    for (const part of funcMatch[3].split(",")) {
+                        const pm = part.trim().match(/^(\w+)(\??):\s*(.+)$/);
+                        if (pm) paramTypes.set(pm[1], pm[2] ? `${pm[3].trim()}?` : pm[3].trim());
+                    }
+                }
+                const rawRet = funcMatch[4]?.trim() ?? "";
+                let retType = "";
+                if (rawRet) {
+                    retType = rawRet.startsWith("(") && rawRet.endsWith(")")
+                        ? rawRet.slice(1, -1).split(",")[0]?.trim() ?? ""
+                        : rawRet;
+                }
+                for (const desc of doc.desc) out.push(`${indent}--- ${desc}`);
+                for (const [paramName, paramDesc] of doc.params) {
+                    const type = paramTypes.get(paramName);
+                    out.push(`${indent}---@param ${paramName}${type ? ` ${type}` : ""}${paramDesc ? ` — ${paramDesc}` : ""}`);
+                }
+                if (doc.returns) {
+                    out.push(`${indent}---@return${retType ? ` ${retType}` : ""} — ${doc.returns}`);
+                }
+            }
+        }
+        out.push(lines[i]);
+    }
+
+    return out.join("\n");
+}
+
 export function convertJsDocComments(src: string): string {
     const lines = src.split("\n");
     const out: string[] = [];
@@ -448,6 +499,7 @@ export function formatFile(
     luauPath: string,
     strict: boolean,
     optimizeLevel: false | 0 | 1 | 2,
+    sidecar: Map<string, FnDoc> = new Map(),
 ): void {
     if (writingFiles.has(luauPath)) return;
     if (!fs.existsSync(luauPath)) return;
@@ -465,6 +517,7 @@ export function formatFile(
     apply(fixBlockCommentOpeners);
     apply(organizePreamble);
     apply(convertJsDocComments);
+    apply(s => injectJsDocFromSidecar(s, sidecar));
     apply(stripUselessBlockComments);
     apply(castTsImports);
     apply(addSpacing);

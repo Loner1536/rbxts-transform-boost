@@ -11,15 +11,13 @@
                 "verbose": true
             },
             {
-                "transform": "rbxts-transform-luau",
-                "strict": true,
-                "optimize": true,
-                "optimizeLevel": 2,
+                "transform": "rbxts-transform-native",
                 "verbose": true
             },
             {
-                "transform": "rbxts-transform-native",
-                "types": true,
+                "transform": "rbxts-transform-luau",
+                "strict": true,
+                "optimize": 2,
                 "verbose": true
             }
         ]

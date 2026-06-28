@@ -1,7 +1,7 @@
 import ts from "typescript";
 import * as path from "path";
 import type { PluginConfig } from "./config";
-import { formatFile } from "./passes/format";
+import { formatFile, type FnDoc } from "./passes/format";
 export type { PluginConfig };
 
 function outPathForSource(sourceFile: ts.SourceFile, program: ts.Program): string | null {
@@ -36,6 +36,7 @@ type FileMeta = {
     strict: boolean;
     optimizeLevel: false | 0 | 1 | 2;
     verbose: boolean;
+    sidecar: Map<string, FnDoc>;
 };
 
 const pending = new Map<string, FileMeta>();
@@ -44,7 +45,7 @@ let finalizeRegistered = false;
 function flushPending(): void {
     for (const [, meta] of pending) {
         try {
-            formatFile(meta.outPath, meta.strict, meta.optimizeLevel);
+            formatFile(meta.outPath, meta.strict, meta.optimizeLevel, meta.sidecar);
         } catch {
             // silently skip files that fail — they stay as-is
         }
@@ -56,6 +57,48 @@ function registerFinalizer(): void {
     if (finalizeRegistered) return;
     finalizeRegistered = true;
     process.on("exit", flushPending);
+}
+
+function jsDocText(comment: ts.JSDoc["comment"]): string {
+    if (!comment) return "";
+    if (typeof comment === "string") return comment;
+    return (comment as ts.NodeArray<ts.JSDocComment>)
+        .map(c => ("text" in c ? (c as { text: string }).text : ""))
+        .join("");
+}
+
+function collectJsDoc(ts: typeof import("typescript"), sourceFile: ts.SourceFile): Map<string, FnDoc> {
+    const sidecar = new Map<string, FnDoc>();
+
+    function visit(node: ts.Node): void {
+        if (ts.isFunctionDeclaration(node) && node.name) {
+            const jsDocs = (node as { jsDoc?: ts.JSDoc[] }).jsDoc;
+            if (jsDocs && jsDocs.length > 0) {
+                const doc = jsDocs[jsDocs.length - 1];
+                const rawDesc = jsDocText(doc.comment);
+                const desc = rawDesc.split("\n").map(l => l.trim()).filter(Boolean);
+                const params = new Map<string, string>();
+                let returns = "";
+
+                for (const tag of doc.tags ?? []) {
+                    if (ts.isJSDocParameterTag(tag)) {
+                        const name = ts.isIdentifier(tag.name) ? tag.name.text : "";
+                        if (name) params.set(name, jsDocText(tag.comment).trim());
+                    } else if (ts.isJSDocReturnTag(tag)) {
+                        returns = jsDocText(tag.comment).trim();
+                    }
+                }
+
+                if (desc.length > 0 || params.size > 0 || returns) {
+                    sidecar.set(node.name.text, { desc, params, returns });
+                }
+            }
+        }
+        ts.forEachChild(node, visit);
+    }
+
+    visit(sourceFile);
+    return sidecar;
 }
 
 export default function (
@@ -74,7 +117,8 @@ export default function (
     return (_ctx) => (sourceFile) => {
         const outPath = outPathForSource(sourceFile, program);
         if (outPath) {
-            pending.set(outPath, { outPath, strict, optimizeLevel, verbose });
+            const sidecar = collectJsDoc(ts, sourceFile);
+            pending.set(outPath, { outPath, strict, optimizeLevel, verbose, sidecar });
             if (verbose) {
                 const rel = outDir ? path.relative(outDir, outPath) : outPath;
                 console.log(`luau: ${rel}`);
